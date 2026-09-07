@@ -3,12 +3,18 @@ import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import { Card } from "@/components/card";
 import ConnectionsYoutube from "@/components/connections-youtube";
+import ConnectionsBuffer from "@/components/connections-buffer";
 
-export default async function ConnectionsPage() {
+export default async function ConnectionsPage({
+  searchParams
+}: {
+  searchParams: { success?: string; error?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
+  const params = searchParams;
 
   let connection: { channelTitle: string; createdAt: string } | null = null;
   try {
@@ -23,6 +29,28 @@ export default async function ConnectionsPage() {
     // No connection (or table missing) — the connect state is shown.
   }
 
+  let bufferConnection: { bufferUsername: string; createdAt: string } | null = null;
+  try {
+    const { data } = await supabase
+      .from("buffer_connections")
+      .select("buffer_username, created_at")
+      .eq("user_id", user!.id)
+      .limit(1)
+      .single();
+    if (data) bufferConnection = { bufferUsername: data.buffer_username, createdAt: data.created_at };
+  } catch {
+    // No connection (or table missing) — the connect state is shown.
+  }
+
+  const bufferNotice: { kind: "success" | "error"; text: string } | null =
+    params.success === "buffer"
+      ? params.error
+        ? params.error === "config"
+          ? { kind: "error", text: "Buffer is not configured. Tell the admin to set BUFFER_CLIENT_ID/SECRET." }
+          : { kind: "error", text: "Could not connect Buffer. Please try again." }
+        : { kind: "success", text: "Buffer connected." }
+      : null;
+
   return (
     <AppShell>
       <div className="workspace py-8 lg:py-10">
@@ -32,8 +60,22 @@ export default async function ConnectionsPage() {
           description="Connect the platforms where your content lives so RepurposeAI can work with it directly."
         />
 
+        {bufferNotice && (
+          <div
+            role="status"
+            className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
+              bufferNotice.kind === "success"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-red-200 bg-red-50 text-red-800"
+            }`}
+          >
+            {bufferNotice.text}
+          </div>
+        )}
+
         <div className="grid gap-4 md:grid-cols-2">
           <ConnectionsYoutube connection={connection} />
+          <ConnectionsBuffer connection={bufferConnection} />
 
           <Card className="flex flex-col justify-between p-6">
             <div>

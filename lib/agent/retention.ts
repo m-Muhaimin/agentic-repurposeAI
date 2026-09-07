@@ -33,22 +33,25 @@ export function retentionWindow(opts?: {
   since?: string;
   unlimited?: boolean;
   now?: Date;
+  lookbackMs?: number;
 }): RetentionWindow {
   if (opts?.unlimited) {
     return { from: "", unlimited: true };
   }
+  const nowMs = (opts?.now ?? new Date()).getTime();
+  const capMs = opts?.lookbackMs ?? RETENTION_DEFAULTS.RUN_HISTORY_MS;
   if (opts?.since) {
     // Honor an explicit client/server `since` but still bound it to the cap so
     // a misbehaving "since" can't scan unbounded history.
     const since = Date.parse(opts.since);
-    const lower = isNaN(since) ? Date.now() - RETENTION_DEFAULTS.RUN_HISTORY_MS : since;
+    const lower = isNaN(since) ? nowMs - capMs : since;
     return {
-      from: new Date(Math.max(lower, Date.now() - RETENTION_DEFAULTS.RUN_HISTORY_MS)).toISOString(),
+      from: new Date(Math.max(lower, nowMs - capMs)).toISOString(),
       unlimited: false
     };
   }
   return {
-    from: new Date((opts?.now ?? new Date()).getTime() - RETENTION_DEFAULTS.RUN_HISTORY_MS).toISOString(),
+    from: new Date(nowMs - capMs).toISOString(),
     unlimited: false
   };
 }

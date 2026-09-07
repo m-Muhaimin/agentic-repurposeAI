@@ -89,6 +89,25 @@ const NAV_GROUPS = [
             <path d="M8 21h8" />
           </svg>
         )
+      },
+      {
+        label: "Observe",
+        href: "/agent/observe",
+        icon: (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[18px]"
+            aria-hidden="true"
+          >
+            <path d="M3 3v18h18" />
+            <path d="M7 14l3-3 3 3 5-6" />
+          </svg>
+        )
       }
     ]
   },

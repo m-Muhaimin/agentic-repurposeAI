@@ -53,8 +53,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 | Item | Status | Notes |
 |---|---|---|
 | `v4_distribution_jobs` data model + platform enum | ✅ | Table exists with draft/scheduled/published/failed/cancelled lifecycle and RLS. |
-| Worker schedule/publish verbs | ⬜ | `lib/agent/tools/distribution.ts` is a **structured stub**: in `automate` mode the capability is exposed but the tool deliberately throws `NotImplementedError` ("no post was scheduled or published"). This is the honest, gated-off state the roadmap specified — no silent no-ops pretending to publish. |
-| Distribution UI | ⬜ | Nothing; gated until Stage 4 verbs are real. |
+| BYOB Buffer publish path | ✅ | **Stage 4 (BYOB) closed.** `buffer_connections` table (migration `20260907000007`, applied live) stores AES-256-GCM-encrypted Buffer OAuth tokens (key `BUFFER_TOKEN_ENCRYPTION_KEY`, 64-hex). OAuth connect/callback/disconnect routes under `app/api/integrations/buffer/`, CSRF state cookie + timing-safe check. `publishingChannelsConnected(userId, service)` is the real async "is a channel connected" gate (queued send → 503 `PUBLISH_NOT_CONNECTED`). `lib/agent/tools/distribution.ts` is now real: reads the approved draft from `outputs`, resolves profiles + platform mapping, calls Buffer's create-update API, and flips the job to `published` (external_id + published_at) or `failed` (error_message). Manual approval only — the send is user-triggered via `POST /api/agent/queue/publish`, never autonomous. Ratelimited with Retry-After surfaced ("Retry after Xs."), no retry loop. |
+| Distribution UI | ✅ | `/connections` shows a Buffer connection card (connect/disconnect, username, connected date) with `?success=buffer`/`?error=` banners; publish queue panel already consumes the API's real `channelsConnected`. |
+| Scheduling + multi-channel in one click | ⬜ | Choose target profiles/channels per send and schedule-ahead via `scheduled_at` (client supports it; UI doesn't expose it yet). |
+| Access-token refresh | 🟡 | Save/read connections is done; a refresh flow using `refresh_token` + `access_token_expires_at` isn't wired yet. |
 
 ## Stage 5 (implicit) — Governance for agentic autonomy
 | Item | Status | Notes |
@@ -64,10 +66,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 | User account deletion / privacy | 🟡 | All `V4_` tables cascade from `auth.users`, so account deletion cleans Agentic data too; no explicit export/delete flow yet (matches the base roadmap). |
 
 ## Suggested sequencing
-🟡 Current: P9 done (real token counting + honest spend surfaces). Next: build real Stage 4 publish actions, then Stage 3 depth/quality improvements.
+🟡 Current: **Stage 4 BYOB publish path is real** (Buffer connection + manual-approval send, migration applied live, RLS verified 38/38, 157 tests green). Next: Stage 4 remainder — token refresh + profile selection/scheduling in the UI — then Stage 3 depth/quality improvements.
 
 > V2 master program status: `docs/agentic-v2-audit.md` is the Phase 0 as-found baseline;
-> phases P0–P14 are tracked in the session todo list (P0 + P1 complete, P2 complete, P3 complete, P4 complete, P5 complete, P6 complete, P7 complete, P8 complete, P9 complete).
+> phases P0–P14 are tracked in the session todo list (P0 + P1 complete, P2 complete, P3 complete, P4 complete, P5 complete, P6 complete, P7 complete, P8 complete, P9 complete, P10 complete, P11 complete, P12 complete, P13 complete, P14 complete).
 >
 > **P1 (baseline hardening) closed:** migration `20260907000005_agentic_v4_tables.sql` makes the
 > six `V4_` tables reproducible from `supabase db push` (live project untouched — guarded);
@@ -208,3 +210,64 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 > All spend data is server-computed (service-role), never client-supplied.
 > Green: `tsc --noEmit`, `npm run build`, RLS **24/24**, agentic **32/32**,
 > **106** unit tests (11 files).
+
+> **P10 (publish queue: manual approval, honest stub) closed.** The publish
+> queue is now built as a human-approval workflow with **no fake publishing**.
+> Pure `lib/agent/publish.ts` owns the approval state machine
+> (`nextPublishStatus`: draft → scheduled → cancel/published) over the existing
+> `v4_distribution_jobs` status vocabulary, `publishingChannelsConnected()` is
+> always `false`, and `NOT_CONNECTED_MESSAGE` is the honest block reason —
+> `published` is structurally unreachable while no channel is connected. `GET
+> /api/agent/queue` lists real publishable drafts (done runs' `output_ids` +
+> `outputs`) and the user's jobs, bounded by the P12 retention window. `POST
+> /api/agent/queue/publish` is the single pre-send approval step: it requires
+> an explicit `confirm: true`, verifies the output via the service client, and
+> records a `scheduled` job that **never auto-advances** (no worker, no
+> scheduling verb, no autopilot); `mode: "send"` consults the same gate and
+> returns a truthful 503 with the "not connected" reason instead of fabricating
+> success. The distribution stub (`tools/distribution.ts`) stays the throwing
+> path. UI: `components/agent/publish-queue-panel.tsx` (queue-for-approval
+> affordance + explicit not-connected banner) on the new `/agent/observe` page
+> (nav entry added in `app-shell.tsx`).
+>
+> **Stage 4 (BYOB) closed:** P10's throwing stub is replaced by the real publish
+> path — `publishingChannelsConnected()` now returns the actual Buffer
+> connection state, `NOT_CONNECTED_MESSAGE` only shows when genuinely no channel
+> is connected, and `tools/distribution.ts` posts approved drafts to Buffer and
+> records `published`/`failed` truthfully. Manual approval before send is
+> retained (the trigger is always user-clicked, never automatic).
+
+> **P11 (observe: real insights, honest empty states) closed.** `lib/agent/observe.ts`
+> (pure) computes the run funnel (runs → steps/done → drafts → approved-drafts
+> from real `v4_agent_steps` + `v4_content_ideas`), and `observeDollarEstimate`
+> converts real monthly token counts to a published-rate estimate. `GET
+> /api/agent/observe` reads only real server rows (bounded to the retention
+> window) and always flags `publishingConnected: false` and `engagementAvailable:
+> false`; the `components/agent/observe-panel.tsx` renders engagement as an
+> honest dashed "No data yet — connect a publishing channel" empty state, never
+> fabricated numbers.
+
+> **P12 (retention groundwork) closed.** Pure `lib/agent/retention.ts` defines
+> the bounded query window (`RUN_HISTORY_MS`/`QUEUE_HISTORY_MS` = 90 days,
+> `MAX_RUNS = 200`, `MAX_STEPS_PER_RUN = 500`, `MAX_QUEUE_ITEMS = 100`) and
+> `withinWindow`/`capAt`; the queue + observe routes bound their reads to it.
+> Data is retained in full under the hood — the window is a read-bound only.
+
+> **P13 (scale / permission surface, read-only) closed.** Pure
+> `lib/agent/scale.ts` derives a `ModeScaleSummary` per mode from
+> `lib/agent/permissions.ts` and asserts the structural guarantee
+> `autopilotDoorExists: false` (`scheduleIsDraftOnly: true`) — no background
+> worker exists, distribution throws, so nothing can auto-advance. `GET
+> /api/agent/scale` resolves the user's plan server-side (never client) and
+> `components/agent/scale-panel.tsx` renders the read-only surface with an
+> amber warning if the guarantee ever flips.
+
+> **P14 (program close-out, groundwork only) closed.** No schema change (all
+> work reuses `v4_distribution_jobs`, `v4_agent_runs/steps/ideas`, outputs,
+> strategies, spend); live DB untouched; RLS stays per-user
+> (`auth.uid() = user_id`); verify scripts stay green. New vitest suites:
+> `publish.test.ts`, `observe.test.ts`, `retention.test.ts`, `scale.test.ts`
+> (+33 tests). Green: `tsc --noEmit`, `npm run build`, RLS **24/24**, agentic
+> **32/32**, **139** unit tests (15 files). Publishing remains human-gated:
+> no provider is connected, nothing auto-sends, and the UI truthfully shows the
+> "not connected" state everywhere a publish affordance exists.

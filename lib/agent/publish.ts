@@ -1,13 +1,13 @@
 // P10: Publish-queue approval state machine + publish gating — pure logic, no I/O.
 //
 // The "publish queue" is a read-mostly surface over the existing
-// `v4_distribution_jobs` table (reused, not a parallel table). These phases only
-// add the honest, manual-approval workflow GROUNDWORK on top of the Stage-4
-// stub. There is deliberately:
+// `v4_distribution_jobs` table. These phases add the honest, manual-approval
+// workflow on top of the Stage-4 BYOB publish path. There is deliberately:
 //   - NO autopilot: no action in this state machine auto-advances a job.
-//   - NO real publishing: any "send to a provider" transition is gated by a
-//     `channelsConnected` flag that is ALWAYS false in this build (no provider
-//     is wired), so a job can never reach `published` here.
+//   - Gated publishing: any "send to a provider" transition needs an explicit
+//     human approval AND a connected channel, which is now real (Buffer via
+//     buffer_connections, see publishingChannelsConnected below). Without a
+//     connected channel a job can never reach `published`.
 //
 // Stored status vocabulary matches the schema enum exactly:
 //   draft | scheduled | published | failed | cancelled
@@ -17,6 +17,7 @@
 // intentionally unchanged (no migration).
 
 import type { DistributionPlatform } from "@/types/agent";
+import { createServiceClient } from "@/lib/supabase/server";
 
 export const PUBLISH_CHANNELS = [
   "linkedin",
@@ -29,8 +30,7 @@ export const PUBLISH_CHANNELS = [
 export type PublishChannel = (typeof PUBLISH_CHANNELS)[number];
 
 // The only non-terminal statuses the queue ever writes. `published` is only
-// ever reached by an explicit `send` action AND channelsConnected=true — which
-// is impossible in this build.
+// ever reached by an explicit `send` action AND channelsConnected=true.
 export type PublishJobStatus = "draft" | "scheduled" | "published" | "failed" | "cancelled";
 
 export type PublishAction =
@@ -41,25 +41,36 @@ export type PublishAction =
   // The user withdraws the job.
   | { type: "cancel" };
 
-// Whether any external publishing provider is connected. This is the single
-// honest gate: in this build no provider is wired, so it is ALWAYS false. Any
-// code that wants to actually send MUST consult this and refuse when false.
-export function publishingChannelsConnected(): boolean {
-  return false;
+export type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
+
+// Whether the user has a real publishing provider connected (Buffer, Stage 4).
+// This is the single honest gate: no buffer_connections row for the user means
+// no channel, and SENDING MUST refuse when false. Async, DB-backed — callers
+// pass the same service client they already hold for the request.
+export async function publishingChannelsConnected(userId: string, service: ServiceClient): Promise<boolean> {
+  if (!userId || typeof service?.from !== "function") return false;
+  const { data, error } = await service
+    .from("buffer_connections")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return true;
 }
 
 export const NOT_CONNECTED_MESSAGE =
-  "No publishing channel is connected. Publishing to a provider is not available yet — this is the honest stub state.";
+  "No publishing channel is connected. Connect a Buffer account to enable sending to your channels.";
 
 // The legal transitions of the approval state machine. `published` requires an
 // explicit `approve_send` action AND an actual connected channel; both are
 // checked here, so even a forced `approve_send` cannot produce `published`
 // when channels are disconnected. Every action is explicit — nothing advances
-// on its own (no autopilot).
+// on its own (no autopilot). Callers resolve `channelsConnected` via the
+// DB-backed publishingChannelsConnected(userId, serviceClient).
 export function nextPublishStatus(
   current: PublishJobStatus,
   action: PublishAction,
-  channelsConnected = publishingChannelsConnected()
+  channelsConnected = false
 ): PublishJobStatus {
   switch (action.type) {
     case "queue":
@@ -90,14 +101,14 @@ export function isPendingSend(status: PublishJobStatus): boolean {
   return status === "scheduled";
 }
 
-export function canRequestSend(status: PublishJobStatus): boolean {
-  return status === "scheduled" && publishingChannelsConnected();
+export function canRequestSend(status: PublishJobStatus, channelsConnected = false): boolean {
+  return status === "scheduled" && channelsConnected;
 }
 
 // The honest reason a "Send" is blocked, when it is. Returns null when the job
-// both may be sent AND a channel is connected (never true in this build).
-export function publishBlockReason(status: PublishJobStatus): string | null {
-  if (isPendingSend(status) && !publishingChannelsConnected()) {
+// both may be sent AND a channel is connected.
+export function publishBlockReason(status: PublishJobStatus, channelsConnected = false): string | null {
+  if (isPendingSend(status) && !channelsConnected) {
     return NOT_CONNECTED_MESSAGE;
   }
   if (status === "published") return "Already marked published.";

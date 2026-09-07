@@ -330,11 +330,52 @@ async function main() {
   const updRun = await b.from("v4_agent_runs").update({ status: "cancelled" }).eq("id", runId).select();
   check("B cannot update A's agent run", !updRun.error && Array.isArray(updRun.data) && updRun.data.length === 0, updRun.error?.message);
 
+  console.log("Stage 4 BYOB — buffer_connections (encrypted token store):");
+  const connId = await (async () => {
+    const { data, error } = await a
+      .from("buffer_connections")
+      .insert({
+        user_id: aId,
+        buffer_account_id: "acct-agentic-e2e",
+        buffer_username: "agentic-e2e",
+        access_token: "ENC_TEST_ACCESS",
+        refresh_token: "ENC_TEST_REFRESH"
+      })
+      .select("id")
+      .single();
+    check("A can insert their own Buffer connection (with check RLS)", !error && data?.id, error?.message);
+    return data?.id;
+  })();
+
+  const { data: connRead, error: connReadErr } = await a
+    .from("buffer_connections")
+    .select("access_token, buffer_username")
+    .eq("user_id", aId)
+    .single();
+  check(
+    "A can read back their own Buffer connection",
+    !connReadErr && connRead?.buffer_username === "agentic-e2e",
+    connReadErr?.message
+  );
+
+  const dupe = await a
+    .from("buffer_connections")
+    .insert({ user_id: aId, buffer_account_id: "acct-2", buffer_username: "x", access_token: "t" });
+  check("buffer_connections enforces one row per user (unique user_id)", Boolean(dupe.error), dupe.error?.message);
+
+  const bConn = await b.from("buffer_connections").select("id").eq("user_id", aId);
+  check("B cannot read A's Buffer connection", Array.isArray(bConn.data) && bConn.data.length === 0, bConn.error?.message);
+  const bConnDel = await b.from("buffer_connections").delete().eq("user_id", aId).select();
+  check("B cannot delete A's Buffer connection", !bConnDel.error && Array.isArray(bConnDel.data) && bConnDel.data.length === 0, bConnDel.error?.message);
+  void connId;
+
   console.log("Cleanup cascade:");
   const delA = await admin.auth.admin.deleteUser(aId);
   check("admin can delete user A", !delA.error, delA.error?.message);
   const remaining = await admin.from("v4_agent_runs").select("id").eq("id", runId);
   check("A's agent runs cascade-delete when the user is deleted", Array.isArray(remaining.data) && remaining.data.length === 0);
+  const remainingConn = await admin.from("buffer_connections").select("id").eq("user_id", aId);
+  check("A's Buffer connection cascade-deletes with the user", Array.isArray(remainingConn.data) && remainingConn.data.length === 0);
 }
 
 try {

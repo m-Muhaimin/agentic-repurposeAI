@@ -12,6 +12,7 @@ export interface RunFunnelRow {
   runId: string;
   status: string;
   steps: number;
+  stepsDone: number; // durable steps recorded as `done` for this run
   draftCount: number;
   approvedDraftCount: number;
 }
@@ -29,8 +30,9 @@ export interface FunnelCounts {
 }
 
 // Compute the funnel from a list of runs (each with its own step/draft counts).
-// `approvedIdeaCount` per run is provided so the "drafts from approved ideas"
-// signal is honest: it counts the run's approved ideas, not fabricated clicks.
+// `approvalCounts` maps runId → number of approved ideas, so the
+// "drafts from approved ideas" signal is honest: it counts the run's approved
+// ideas, not fabricated clicks.
 export function computeFunnel(runs: RunFunnelRow[], approvalCounts: Record<string, number>): FunnelCounts {
   let runsCompleted = 0;
   let runsAwaitingApproval = 0;
@@ -44,6 +46,7 @@ export function computeFunnel(runs: RunFunnelRow[], approvalCounts: Record<strin
     if (r.status === "done") runsCompleted += 1;
     if (r.status === "awaiting_approval") runsAwaitingApproval += 1;
     steps += r.steps;
+    stepsDone += r.stepsDone;
     drafts += r.draftCount;
     const approved = approvalCounts[r.runId] ?? 0;
     approvedDrafts += Math.min(approved, r.draftCount);

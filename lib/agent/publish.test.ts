@@ -1,6 +1,10 @@
-// P10: Tests for the publish-queue approval state machine + gating.
-// The CRITICAL guarantee: no action auto-advances a job, and without a
+// P10 + Stage 4 BYOB: Tests for the publish-queue approval state machine +
+// gating. The CRITICAL guarantee: no action auto-advances a job, and without a
 // connected channel a job can never reach `published`.
+//
+// publishingChannelsConnected is now DB-backed and async (buffer_connections
+// row exists ⇔ connected). The pure state machine stays pure: callers pass the
+// resolved boolean in.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -15,8 +19,43 @@ import {
 } from "@/lib/agent/publish";
 
 describe("publishingChannelsConnected", () => {
-  it("is always false in this build (no provider is wired)", () => {
-    expect(publishingChannelsConnected()).toBe(false);
+  it("is false when no service client / user id is given", async () => {
+    // Fail closed in every degenerate call — never assume connected.
+    expect(await publishingChannelsConnected("", {} as never)).toBe(false);
+    expect(await publishingChannelsConnected("user-1", {} as never)).toBe(false);
+  });
+
+  it("is true when a buffer_connections row exists for the user", async () => {
+    const service = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { id: "conn-1" }, error: null }) })
+        })
+      })
+    } as never;
+    expect(await publishingChannelsConnected("user-1", service)).toBe(true);
+  });
+
+  it("is false when no buffer_connections row exists (disconnected)", async () => {
+    const service = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) })
+        })
+      })
+    } as never;
+    expect(await publishingChannelsConnected("user-1", service)).toBe(false);
+  });
+
+  it("is false when the query errors (fail closed)", async () => {
+    const service = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: null, error: new Error("boom") }) })
+        })
+      })
+    } as never;
+    expect(await publishingChannelsConnected("user-1", service)).toBe(false);
   });
 });
 
@@ -38,7 +77,6 @@ describe("nextPublishStatus — approval state machine", () => {
   });
 
   it("approve_send only publishes a scheduled job when a channel is connected", () => {
-    // This forms the transition that would be real only after wiring a provider.
     expect(nextPublishStatus("scheduled", { type: "approve_send" }, true)).toBe("published");
   });
 
@@ -49,8 +87,6 @@ describe("nextPublishStatus — approval state machine", () => {
   });
 
   it("nothing auto-advances: every transition requires an explicit action", () => {
-    // A job left alone must keep its state for every non-destructive action
-    // when channels are disconnected — the core no-autopilot property.
     const initial = "scheduled";
     const actions = [
       { type: "queue" },
@@ -63,8 +99,7 @@ describe("nextPublishStatus — approval state machine", () => {
     }
   });
 
-  it("published is unreachable with the real (disconnected) gate default", () => {
-    // Simulate the full lifecycle in every order; published must be unreachable.
+  it("published is unreachable with the disconnected gate", () => {
     const results = [
       nextPublishStatus("draft", { type: "queue" }),
       nextPublishStatus("scheduled", { type: "approve_send" })
@@ -81,19 +116,25 @@ describe("predicates + gating", () => {
     expect(isPendingSend("draft")).toBe(false);
   });
 
-  it("canRequestSend is false because no channel is connected", () => {
+  it("canRequestSend defaults to false (no channel) and requires connected", () => {
     expect(canRequestSend("scheduled")).toBe(false);
+    expect(canRequestSend("scheduled", false)).toBe(false);
+    expect(canRequestSend("scheduled", true)).toBe(true);
+    expect(canRequestSend("draft", true)).toBe(false);
+    expect(canRequestSend("published", true)).toBe(false);
   });
 
   it("publishBlockReason explains why send is blocked (no fake success)", () => {
-    expect(publishBlockReason("scheduled")).toContain("not available");
+    expect(publishBlockReason("scheduled")).toContain("Connect a Buffer");
     expect(publishBlockReason("published")).toContain("published");
     expect(publishBlockReason("cancelled")).toContain("cancelled");
     expect(publishBlockReason("draft")).toBeNull();
+    // Connected + pending => no block reason.
+    expect(publishBlockReason("scheduled", true)).toBeNull();
   });
 
   it("NOT_CONNECTED_MESSAGE is truthful", () => {
-    expect(NOT_CONNECTED_MESSAGE).toContain("not available");
+    expect(NOT_CONNECTED_MESSAGE).toContain("Connect a Buffer");
     expect(NOT_CONNECTED_MESSAGE).not.toContain("success");
   });
 });

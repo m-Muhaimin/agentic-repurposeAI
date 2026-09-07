@@ -59,6 +59,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["youtube_connections"]["Row"]>;
         Relationships: [];
       };
+      buffer_connections: {
+        Row: { id: string; user_id: string; buffer_account_id: string; buffer_username: string; access_token: string; refresh_token: string | null; access_token_expires_at: string | null; created_at: string; updated_at: string };
+        Insert: Partial<Database["public"]["Tables"]["buffer_connections"]["Row"]> & { user_id: string; buffer_account_id: string; buffer_username: string; access_token: string };
+        Update: Partial<Database["public"]["Tables"]["buffer_connections"]["Row"]>;
+        Relationships: [];
+      };
       profiles: {
         Row: { user_id: string; plan: "beta"|"creator"|"pro"|"studio"; plan_status: "active"|"cancelled"; created_at: string; updated_at: string };
         Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { user_id: string };
