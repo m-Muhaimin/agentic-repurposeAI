@@ -95,6 +95,29 @@ const AUDIENCES = [
   }
 ];
 
+const TESTIMONIALS = [
+  {
+    quote: "Used to spend 3 hours turning one episode into posts. Now it takes 15 minutes and the drafts are better than what I'd write tired.",
+    name: "Alex M.",
+    role: "Solo founder, weekly podcast"
+  },
+  {
+    quote: "I don't want to sound like a generic content machine. RepurposeAI keeps my voice and gives me something I'd actually publish.",
+    name: "Priya R.",
+    role: "LinkedIn creator, 12k followers"
+  },
+  {
+    quote: "Our agency repackages client interviews into thought leadership without turning our writers into transcriptionists.",
+    name: "James T.",
+    role: "Content agency lead"
+  },
+  {
+    quote: "The short-form scripts alone are worth it. We went from one post a week to a consistent short-form schedule.",
+    name: "Sarah K.",
+    role: "Brand strategist"
+  }
+];
+
 const INPUTS = [
   {
     name: "YouTube",
@@ -212,18 +235,17 @@ export default function Home() {
 
               <h1 className="mt-5 font-display text-[32px] leading-[1.222] tracking-[-0.25px] md:text-[45px] md:leading-[1.156] lg:text-[57px] lg:leading-[1.123]">
                 Turn one recording into{" "}
-                <span className="text-primary-500">three ready-to-post drafts</span>
+                <span className="text-primary-500">platform-ready drafts</span>
               </h1>
 
               <p className="mt-6 max-w-lg text-base leading-normal tracking-[0.5px] text-theme-text-secondary">
-                Upload a podcast episode or YouTube video. We transcribe it and write a LinkedIn
-                post, a newsletter section, and a short-form script — sized and hooked for each
-                platform, not just re-formatted text.
+                Upload a podcast or YouTube video. We write a LinkedIn post, a newsletter section, and a short-form
+                script — tuned for each platform, not reformatted text.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/upload" className="btn btn-primary px-8">
-                  Get started — it&apos;s free
+                  Start creating — it&apos;s free
                 </Link>
                 <Link href="/#how-it-works" className="btn btn-outline-primary px-8">
                   See how it works
