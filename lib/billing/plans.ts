@@ -30,6 +30,22 @@ export interface PlanLimits {
   maxOutputsPerJob: number;
   // Regeneration calls per output row.
   maxRegenerationsPerJob: number;
+  // Agentic run budgets (P2). Snapshotted onto each v4_agent_runs row at
+  // creation and enforced by the orchestrator — a hit parks the run with any
+  // completed drafts kept. Values are config so tiers slot in without touching
+  // the guards.
+  agent: {
+    // Max durable step rows (tool calls) budgeted for one run. Excel helps:
+    // each angle × format costs 2 (generate + review), up to 4 with a revision
+    // pass. This ceiling is what makes "no unbounded agent loops" enforceable.
+    maxSteps: number;
+    // Max accumulated cost-units per run (planning token counts are real; the
+    // generation estimate is coarse — see orchestrator).
+    maxCostUnits: number;
+    // Max wall-clock runtime an execution phase may take, seconds. Guards
+    // against a run that says executing without progressing.
+    maxRuntimeSeconds: number;
+  };
 }
 
 export interface Plan {
@@ -58,7 +74,12 @@ export const PLANS: Record<PlanId, Plan> = {
       maxJobsPerMonth: 5,
       maxInputMinutes: 30,
       maxOutputsPerJob: 3,
-      maxRegenerationsPerJob: 2
+      maxRegenerationsPerJob: 2,
+      agent: {
+        maxSteps: 50,
+        maxCostUnits: 2500,
+        maxRuntimeSeconds: 1800
+      }
     },
     includes: [
       "5 repurpose jobs / month",
@@ -82,7 +103,12 @@ export const PLANS: Record<PlanId, Plan> = {
       maxJobsPerMonth: 20,
       maxInputMinutes: 60,
       maxOutputsPerJob: 5,
-      maxRegenerationsPerJob: 5
+      maxRegenerationsPerJob: 5,
+      agent: {
+        maxSteps: 60,
+        maxCostUnits: 5000,
+        maxRuntimeSeconds: 2700
+      }
     },
     includes: ["Everything in Beta", "20 jobs / month", "Up to 1 hour per recording"]
   },
@@ -98,7 +124,12 @@ export const PLANS: Record<PlanId, Plan> = {
       maxJobsPerMonth: 75,
       maxInputMinutes: 180,
       maxOutputsPerJob: 6,
-      maxRegenerationsPerJob: 10
+      maxRegenerationsPerJob: 10,
+      agent: {
+        maxSteps: 80,
+        maxCostUnits: 10000,
+        maxRuntimeSeconds: 3600
+      }
     },
     includes: ["Everything in Creator", "75 jobs / month", "Up to 3 hours per recording"]
   },
@@ -114,7 +145,12 @@ export const PLANS: Record<PlanId, Plan> = {
       maxJobsPerMonth: null,
       maxInputMinutes: 600,
       maxOutputsPerJob: 10,
-      maxRegenerationsPerJob: 25
+      maxRegenerationsPerJob: 25,
+      agent: {
+        maxSteps: 100,
+        maxCostUnits: 20000,
+        maxRuntimeSeconds: 5400
+      }
     },
     includes: ["Everything in Pro", "Unlimited jobs", "Up to 10 hours per recording"]
   }
@@ -131,4 +167,11 @@ export function getPlan(id: string | null | undefined): Plan {
 // the site never accidentally renders an unpublished tier.
 export function getPublicPlans(): Plan[] {
   return Object.values(PLANS).filter((p) => p.isPublic);
+}
+
+// The agentic run budget snapshot, taken server-side at run creation so an
+// in-flight run is never re-budgeted by a later plan change. The orchestrator
+// reads the snapshotted columns on the run row, not this module.
+export function agentBudgetFor(plan: Plan): PlanLimits["agent"] {
+  return { ...plan.limits.agent };
 }

@@ -7,7 +7,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { generateOutput } from "@/lib/ai/generate";
 import { buildSystemPrompt } from "@/lib/ai/prompts";
 import { getUserPrompts } from "@/lib/prompts";
-import { getUserBrandVoice } from "@/lib/agent/memory";
+import { getUserBrandVoice, getRecentSignals } from "@/lib/agent/memory";
 import { log } from "@/lib/logger";
 import type { AgentTool, ToolContext, ToolResult, OutputFormat } from "@/types/agent";
 
@@ -60,7 +60,20 @@ export const generationTool: AgentTool = {
         ? `\n\nBrand voice — apply these guidelines to the whole draft:\n- Tone: ${brand.tone || "match the transcript's register"}${brand.forbiddenPhrases.length ? `\n- Forbidden: ${brand.forbiddenPhrases.join(", ")}` : ""}${brand.examples.length ? `\n- Examples to mirror:\n${brand.examples.map((e) => `  - ${e}`).join("\n")}` : ""}`
         : "";
 
-    const systemPrompt = base + angleBlock + revisionBlock + voiceBlock;
+    // P4: Wire recent edit signals so the generation leans toward what the user
+    // tends to keep. Bounded (max 5), typed, deterministic — no LLM call.
+    let editContextBlock = "";
+    try {
+      const editSignals = await getRecentSignals(ctx.userId, "edit", 5);
+      if (editSignals.length > 0) {
+        const summaries = editSignals.map((s) => `  - ${s.whatChanged}`).join("\n");
+        editContextBlock = `\n\nRecent user edits to previous drafts (learn what they keep vs rewrite):\n${summaries}`;
+      }
+    } catch {
+      // Memory unavailable — skip the context block gracefully.
+    }
+
+    const systemPrompt = base + angleBlock + revisionBlock + voiceBlock + editContextBlock;
 
     const content = await generateOutput(g.format, g.transcript, systemPrompt);
 

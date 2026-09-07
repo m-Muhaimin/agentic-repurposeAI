@@ -122,6 +122,46 @@ async function main() {
   check("A can create a v4_agent_run (status created)", !runErr && run?.id, runErr?.message);
   runId = run?.id;
 
+  console.log("P2 budgets + heartbeat:");
+  check(
+    "run defaults to a finite step budget",
+    !runErr && typeof run?.max_steps === "number" && run.max_steps > 0,
+    runErr?.message
+  );
+  check(
+    "run defaults to a finite cost budget",
+    !runErr && typeof run?.max_cost_units === "number" && run.max_cost_units > 0,
+    runErr?.message
+  );
+  check(
+    "run defaults to a finite runtime budget",
+    !runErr && typeof run?.max_runtime_s === "number" && run.max_runtime_s > 0,
+    runErr?.message
+  );
+
+  // The budget ceilings are snapshotted columns — a bound outside the allowed
+  // range must be rejected by the check constraint (fail-closed on bad config).
+  const { error: badBudgetErr } = await a
+    .from("v4_agent_runs")
+    .update({ max_steps: 9999 })
+    .eq("id", runId);
+  check("run rejects an out-of-range step budget (check constraint)", badBudgetErr !== null, badBudgetErr?.message);
+  const { error: badCostErr } = await a
+    .from("v4_agent_runs")
+    .update({ max_cost_units: -1 })
+    .eq("id", runId);
+  check("run rejects a non-positive cost budget (check constraint)", badCostErr !== null, badCostErr?.message);
+
+  // Heartbeat is worker-written; a worker can stamp it and the claim logic
+  // reads it back for re-claiming a dead worker.
+  const { data: hb, error: hbErr } = await admin
+    .from("v4_agent_runs")
+    .update({ heartbeat_at: new Date().toISOString() })
+    .eq("id", runId)
+    .select("heartbeat_at")
+    .single();
+  check("service client can write a heartbeat", !hbErr && hb?.heartbeat_at, hbErr?.message);
+
   const { data: claimed, error: claimErr } = await admin
     .from("v4_agent_runs")
     .update({ status: "planning", attempt: 1, transcript_snapshot: "hello world transcript", started_at: new Date().toISOString() })
@@ -198,6 +238,27 @@ async function main() {
     .single();
   check("A can insert a v4_content_strategy (heuristic)", !stratErr && strat?.id, stratErr?.message);
 
+  // P5 strategy agent: the "what should I publish next?" snapshot is persisted
+  // with source='planner' (the planned-recommendation enum value) — append-only,
+  // user-scoped, and readable back by the same user.
+  const { data: stratPlan, error: stratPlanErr } = await a
+    .from("v4_content_strategies")
+    .insert({ user_id: aId, title: "Next publish — test snapshot", body: "recommendation snapshot", source: "planner" })
+    .select()
+    .single();
+  check("A can persist a strategy snapshot (source='planner', P5)", !stratPlanErr && stratPlan?.id, stratPlanErr?.message);
+
+  const { data: stratReadBack, error: stratReadErr } = await a
+    .from("v4_content_strategies")
+    .select("source")
+    .eq("user_id", aId)
+    .eq("source", "planner");
+  check(
+    "A can read back their own planner strategy snapshots (append-only history)",
+    !stratReadErr && Array.isArray(stratReadBack) && stratReadBack.length >= 1,
+    stratReadErr?.message
+  );
+
   const { data: outA, error: outErr } = await a
     .from("outputs")
     .insert({ source_id: sourceId, user_id: aId, format: "newsletter", content: "draft body" })
@@ -263,6 +324,8 @@ async function main() {
   check("B cannot read A's distribution jobs", Array.isArray(bDist.data) && bDist.data.length === 0, bDist.error?.message);
   const bStrat = await b.from("v4_content_strategies").select("id").eq("user_id", aId);
   check("B cannot read A's strategies", Array.isArray(bStrat.data) && bStrat.data.length === 0, bStrat.error?.message);
+  const bStratPlan = await b.from("v4_content_strategies").select("id").eq("user_id", aId).eq("source", "planner");
+  check("B cannot read A's planner strategy snapshots", Array.isArray(bStratPlan.data) && bStratPlan.data.length === 0, bStratPlan.error?.message);
 
   const updRun = await b.from("v4_agent_runs").update({ status: "cancelled" }).eq("id", runId).select();
   check("B cannot update A's agent run", !updRun.error && Array.isArray(updRun.data) && updRun.data.length === 0, updRun.error?.message);

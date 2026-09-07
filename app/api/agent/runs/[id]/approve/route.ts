@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { recordAngleDecision } from "@/lib/agent/memory";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/runs/[id]/approve
@@ -70,6 +71,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .eq("user_id", user.id);
       if (ideaErr) {
         log.warn("agent.approve_idea_failed", { idea_id: idea.id, run_id: id, error: ideaErr.message });
+        continue;
+      }
+      // Durably record the user's keep/reject call as a memory signal, so the
+      // P5 strategy agent can see what this creator tends to accept. Best-effort.
+      const { data: ideaRow } = await service
+        .from("v4_content_ideas")
+        .select("title")
+        .eq("id", idea.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (ideaRow?.title) {
+        await recordAngleDecision(user.id, ideaRow.title, idea.approved ? "approved" : "rejected");
       }
     }
   }

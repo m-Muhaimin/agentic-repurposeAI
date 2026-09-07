@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { getAgentPreferences, ensureAgentPreferences, suggestFromSignals } from "@/lib/agent/memory";
+import { getAgentPreferences, ensureAgentPreferences, suggestFromSignals, recordPreferenceSignal } from "@/lib/agent/memory";
 import { AGENT_MODES, type AgentMode } from "@/types/agent";
 import { log } from "@/lib/logger";
 
@@ -73,6 +73,18 @@ export async function PUT(request: Request) {
   }
 
   await ensureAgentPreferences(user.id);
+
+  // The explicit preference change is itself a durable memory signal (Durably
+  // persisted so the P5 strategist sees how the brand voice evolved). Best-effort,
+  // never fatal.
+  for (const [field, detail] of Object.entries({
+    auto_mode: patch.auto_mode ? `auto_mode → ${patch.auto_mode}` : null,
+    brand_tone: patch.brand_tone !== undefined ? `brand_tone → "${patch.brand_tone}"` : null,
+    brand_forbidden_phrases: patch.brand_forbidden_phrases ? "brand_forbidden_phrases updated" : null,
+    brand_examples: patch.brand_examples ? "brand_examples updated" : null
+  })) {
+    if (detail) await recordPreferenceSignal(user.id, field, detail);
+  }
 
   const service = createServiceClient();
   const { error } = await service

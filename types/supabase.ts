@@ -90,7 +90,7 @@ export type Database = {
         Relationships: [];
       };
       v4_agent_runs: {
-        Row: { id: string; user_id: string; source_id: string; mode: "assist"|"execute"|"automate"; status: "created"|"planning"|"awaiting_approval"|"executing"|"evaluating"|"done"|"failed"|"cancelled"; plan: unknown; transcript_snapshot: string | null; input_tokens: number; output_tokens: number; cost_units: number; step_count: number; output_ids: string[]; error_message: string | null; attempt: number; approval_decision: string | null; created_at: string; updated_at: string; started_at: string | null; finished_at: string | null };
+        Row: { id: string; user_id: string; source_id: string; mode: "assist"|"execute"|"automate"; status: "created"|"planning"|"awaiting_approval"|"executing"|"evaluating"|"done"|"failed"|"cancelled"; plan: unknown; transcript_snapshot: string | null; input_tokens: number; output_tokens: number; cost_units: number; step_count: number; output_ids: string[]; error_message: string | null; attempt: number; approval_decision: string | null; created_at: string; updated_at: string; started_at: string | null; finished_at: string | null; max_steps: number; max_cost_units: number; max_runtime_s: number; heartbeat_at: string | null };
         Insert: Partial<Database["public"]["Tables"]["v4_agent_runs"]["Row"]> & { user_id: string; source_id: string };
         Update: Partial<Database["public"]["Tables"]["v4_agent_runs"]["Row"]>;
         Relationships: [{ foreignKeyName: "v4_agent_runs_source_id_fkey"; columns: ["source_id"]; isOneToOne: false; referencedRelation: "sources"; referencedColumns: ["id"] }];

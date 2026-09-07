@@ -7,7 +7,7 @@
 //    compute confidence, gate the automatic write, ask the user.
 
 import { createServiceClient } from "@/lib/supabase/server";
-import type { BrandVoiceProfile, EditSignal } from "@/types/agent";
+import type { BrandVoiceProfile, EditSignal, SignalKind } from "@/types/agent";
 
 export interface AgentPreferences {
   autoMode: "assist" | "execute" | "automate";
@@ -79,20 +79,84 @@ export async function ensureAgentPreferences(userId: string): Promise<void> {
   }
 }
 
-// Record a structured signal from a user edit. This is append-only history,
-// capped to ~12 recent signals. NOT a profile rewrite.
-export async function recordEditSignal(userId: string, signal: EditSignal): Promise<void> {
+// Append a signal to the capped history. Pure — the write side wraps it so the
+// append/cap logic is unit-testable without Supabase. Deliberately keeps the
+// newest ~12 signals (a bounded memory: the agent leans on recency, not a
+// growing journal).
+export function appendSignal(signals: EditSignal[], signal: EditSignal, cap = 12): EditSignal[] {
+  return [...signals, signal].slice(-cap);
+}
+
+// Record a durable, user-scoped, RLS-protected signal (the write is a per-user
+// row update, so it is protected by the v4_agent_preferences policies — the
+// caller is the authenticated user via the confirm/gate routes or a service
+// write keyed to the user). Append-only history, capped; NEVER a profile
+// rewrite by itself.
+export async function recordSignal(userId: string, signal: EditSignal): Promise<void> {
   try {
     const service = createServiceClient();
     const prefs = await getAgentPreferences(userId);
     const signals = prefs?.editSignals ?? [];
-    const next = [...signals, signal].slice(-12);
+    const next = appendSignal(signals, signal);
     await service
       .from("v4_agent_preferences")
       .upsert({ user_id: userId, edit_signals: next }, { onConflict: "user_id" });
   } catch {
     // Best-effort memory; a failed signal write never surfaces to the user.
   }
+}
+
+// Record a structured signal from a user edit. This is append-only history,
+// capped to ~12 recent signals. NOT a profile rewrite.
+export async function recordEditSignal(userId: string, signal: EditSignal): Promise<void> {
+  await recordSignal(userId, { ...signal, kind: "edit" });
+}
+
+// Record an explicit preference the user changed (mode or a brand field). The
+// preference itself is written by the PUT /api/agent/preferences route; this is
+// the durable signal of the change, so the P5 strategist can see what the user
+// tends to move.
+export async function recordPreferenceSignal(
+  userId: string,
+  field: string,
+  detail: string
+): Promise<void> {
+  await recordSignal(userId, {
+    kind: "preference",
+    outputId: field,
+    whatChanged: detail,
+    at: new Date().toISOString()
+  });
+}
+
+// Record a per-angle decision at the human approval gate: the user kept or
+// rejected an idea. The title is the durable handle (ideas are re-scored/ranked,
+// so a stable-by-title signal survives re-ranking).
+export async function recordAngleDecision(
+  userId: string,
+  ideaTitle: string,
+  decision: "approved" | "rejected"
+): Promise<void> {
+  await recordSignal(userId, {
+    kind: "angle_decision",
+    outputId: ideaTitle,
+    whatChanged: decision,
+    at: new Date().toISOString()
+  });
+}
+
+// Read the user's recent signals — the context the agent (and the P5 strategy
+// agent) builds from. Filtered by kind and capped so a caller asks for exactly
+// the slice it needs.
+export async function getRecentSignals(
+  userId: string,
+  kind?: SignalKind,
+  limit = 12
+): Promise<EditSignal[]> {
+  const prefs = await getAgentPreferences(userId);
+  if (!prefs) return [];
+  const signals = kind ? prefs.editSignals.filter((s) => s.kind === kind) : prefs.editSignals;
+  return signals.slice(-limit);
 }
 
 // Confidence-gated application of signals → actual profile changes. Mirrors the

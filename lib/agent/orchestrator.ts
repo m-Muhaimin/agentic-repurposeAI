@@ -1,20 +1,34 @@
-// Agentic V1 orchestrator — the durable worker behind /api/agent/process.
+// Agentic orchestrator v2 (P2) — the durable worker behind /api/agent/process.
 // Mirrors the base /api/process job semantics so a serverless function that dies
-// mid-run doesn't park a run forever:
-//   - claim/resume runs with the same 10-minute stale window
+// mid-run doesn't park a run forever, and adds P2 governance on top of V1:
+//
+//   - claim/resume runs: planning window runs off updated_at (10 min), execution
+//     re-claims on heartbeat staleness (90 s) so a dead worker is picked up fast
 //   - every transition persists a v4_agent_steps row (append-only timeline)
 //   - nothing important lives in memory between requests
+//   - PER-RUN BUDGETS (P2): maxSteps / maxCostUnits / maxRuntimeS, snapshotted from
+//     the user's plan at creation, enforced here — a hit STOPS the run and keeps
+//     whatever drafts already completed (partial completion)
+//   - HEARTBEAT (P2): heartbeat_at touched between steps; also the cancel check
+//   - RETRY CLASSIFICATION (P2): transient provider/network errors leave the run
+//     re-claimable (bounded by MAX_PHASE_ATTEMPTS) instead of failing it forever;
+//     permanent errors (validation, schema, capability stubs) fail fast
+//   - CANCELLATION (P2): status flips to cancelled via /api/agent/runs/[id]/cancel;
+//     the worker checks between steps and stops cleanly, keeping accepted work
 //
 // State machine:
 //   created → planning → awaiting_approval → executing → evaluating → done
-//                                              └──────────────→ failed
+//                                              └──────────────→ failed | cancelled
 // The run parks at awaiting_approval while the human decides. Approval flips
 // status to executing (POST /api/agent/runs/[id]/approve); a later process call
 // picks it up exactly like a fresh claim.
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { log } from "@/lib/logger";
-import type { AgentMode, AgentRunRow, ContentPlan, OutputFormat } from "@/types/agent";
+import type { AgentMode, AgentRunRow, ContentPlan, OutputFormat, RunStatus, StopReason } from "@/types/agent";
+import { budgetViolation, type BudgetSnapshot } from "@/lib/agent/budgets";
+import { describeError, isTransientError, MAX_PHASE_ATTEMPTS } from "@/lib/agent/errors";
+import { scoreAngle } from "@/lib/agent/idea-scoring";
 import { generationTool } from "@/lib/agent/tools/generation";
 import { intelligenceTool } from "@/lib/agent/tools/intelligence";
 import { sourceTool } from "@/lib/agent/tools/source";
@@ -22,16 +36,29 @@ import { reviewTool } from "@/lib/agent/tools/review";
 
 export type Send = (event: string, data: unknown) => void;
 
-// A claimed run is re-claimable after this long (matches /api/process).
+// Claim windows. Execution runs heartbeat between steps, so a worker that died
+// mid-generation is re-claimable after 90 s of silence instead of the coarse
+// 10-minute window used for planning (which has no long-running loop).
 const STALE_AFTER_MS = 10 * 60 * 1000;
+const HEARTBEAT_STALE_MS = 90 * 1000;
 
-// Coarse cost accounting: the roadmap uses a single "cost units" accumulator so
-// Stage 1 stays cheap and predictable. We approximate units from token counts —
-// planning tokens are real (from Gemini usageMetadata), generation tokens are
-// estimated from transcript+draft size. Deliberately crude; fine for V1.
+// Coarse cost accounting: a single "cost units" accumulator (roadmap Stage 1
+// stays cheap and predictable). Planning tokens are real (usageMetadata);
+// generation tokens are estimated from transcript+draft size. Deliberately
+// crude — the P2 budget ceilings are the guardrail on top of the estimate.
 function estimateGenerationTokens(transcript: string, content: string): number {
   return Math.round(transcript.length / 4 + content.length / 4);
 }
+
+// Pre-call cost estimate for one generation (the transcript half), used so the
+// cost guard can trip BEFORE spending on the next LLM call.
+function estimateGenerationCost(transcript: string): number {
+  return Math.round(transcript.length / 4) / 100;
+}
+
+// Budget hit during planning. Classified permanent (it's not transient) so the
+// run fails with the budget message rather than retrying.
+class RunBudgetError extends Error {}
 
 interface ClaimedRun {
   run: AgentRunRow;
@@ -47,11 +74,25 @@ interface RunRowLite {
   updated_at: string | null;
 }
 
+// What a phase ended with. `done` = normal completion; the rest are clean stops
+// that keep whatever completed work already exists.
+interface RunOutcome {
+  reason: StopReason;
+  costUnits: number;
+  outputIds: string[];
+  completed: number; // drafts written
+  attempted: number; // drafts attempted
+}
+
 // Claim a run for planning (created/planning, or stale) or execution
-// (executing/evaluating, if stale). Runs sitting at awaiting_approval, done,
-// failed or cancelled are never claimed. Returns null when we don't hold it.
-async function claimRun(service: Awaited<ReturnType<typeof createServiceClient>>, runId: string): Promise<ClaimedRun | null> {
+// (executing/evaluating, if stale). Runs at awaiting_approval, done, failed or
+// cancelled are never claimed. Returns null when we don't hold it.
+async function claimRun(
+  service: Awaited<ReturnType<typeof createServiceClient>>,
+  runId: string
+): Promise<ClaimedRun | null> {
   const staleCutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+  const hbCutoff = new Date(Date.now() - HEARTBEAT_STALE_MS).toISOString();
 
   // Which phase should we run? Planning phase: created or planning. Execution
   // phase: executing or evaluating (a previous executor died mid-run).
@@ -69,16 +110,18 @@ async function claimRun(service: Awaited<ReturnType<typeof createServiceClient>>
   const touchedAt = new Date().toISOString();
 
   // Atomic claim: only runs in a claimable state (fresh, or past the stale
-  // window). A concurrent claim just loses the update and gets no row back.
+  // window). Execution staleness is heartbeat-driven when a heartbeat exists
+  // (90 s) and falls back to the 10-minute updated_at window otherwise. A
+  // concurrent claim just loses the update and gets no row back.
   const claimableOr =
     `and(status.eq.created),` +
     `and(status.eq.planning,updated_at.lt.${staleCutoff}),` +
-    `and(status.eq.executing,updated_at.lt.${staleCutoff}),` +
-    `and(status.eq.evaluating,updated_at.lt.${staleCutoff})`;
+    `and(status.eq.executing,or(heartbeat_at.lt.${hbCutoff},and(heartbeat_at.is.null,updated_at.lt.${staleCutoff}))),` +
+    `and(status.eq.evaluating,or(heartbeat_at.lt.${hbCutoff},and(heartbeat_at.is.null,updated_at.lt.${staleCutoff})))`;
 
   const claimedRow = await service
     .from("v4_agent_runs")
-    .update({ status: nextStatus, attempt, started_at: touchedAt, updated_at: touchedAt })
+    .update({ status: nextStatus, attempt, started_at: touchedAt, updated_at: touchedAt, heartbeat_at: touchedAt })
     .eq("id", runId)
     .or(claimableOr)
     .select("*")
@@ -115,15 +158,70 @@ async function recordStep(
   });
 }
 
+// Touch the run like "still alive": bumps heartbeat (claim freshness) and
+// returns the live status. Also the cancellation check — if the run was
+// cancelled between steps, a later process call must not keep working on it.
+// Returns null when the row no longer exists (or reached a terminal status).
+async function touchRun(
+  service: Awaited<ReturnType<typeof createServiceClient>>,
+  runId: string
+): Promise<RunStatus | null> {
+  const { data, error } = await service
+    .from("v4_agent_runs")
+    .update({ heartbeat_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", runId)
+    .in("status", ["created", "planning", "awaiting_approval", "executing", "evaluating"])
+    .select("status")
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.status as RunStatus;
+}
+
+// Durable, cross-claim step count — the run's true work so far (retries
+// included), the basis of the maxSteps guard.
+async function countRecordedSteps(
+  service: Awaited<ReturnType<typeof createServiceClient>>,
+  runId: string
+): Promise<number> {
+  const { count } = await service
+    .from("v4_agent_steps")
+    .select("id", { count: "exact", head: true })
+    .eq("run_id", runId);
+  return count ?? 0;
+}
+
 // ── Planning phase: transcript → plan, then park for human approval ──────────
 async function runPlanning(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   run: AgentRunRow,
   send: Send
-): Promise<void> {
+): Promise<RunOutcome> {
   const { runId, userId, sourceId, mode } = { runId: run.id, userId: run.user_id, sourceId: run.source_id, mode: run.mode as AgentMode };
 
+  const budget: BudgetSnapshot = {
+    maxSteps: run.max_steps ?? 50,
+    maxCostUnits: run.max_cost_units ?? 2500,
+    maxRuntimeSeconds: run.max_runtime_s ?? 1800
+  };
+  const recordedSteps = await countRecordedSteps(service, runId);
+  const startedAtMs = run.started_at ? Date.parse(run.started_at) : Date.now();
+
+  const planningGuard = (inFlightSteps: number, inFlightCost: number, what: string) => {
+    const violation = budgetViolation(
+      budget,
+      { steps: recordedSteps, costUnits: run.cost_units ?? 0, startedAtMs },
+      Date.now(),
+      { steps: inFlightSteps, costUnits: inFlightCost }
+    );
+    if (violation) throw new RunBudgetError(`Planning stopped at budget (${violation}) while ${what}.`);
+  };
+
   send("progress", { stage: "Loading source", pct: 5 });
+
+  const control = await touchRun(service, runId);
+  if (!control || control === "cancelled") {
+    return { reason: "cancelled", costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
+  }
 
   const srcCtx = { userId, runId, mode };
   const src = await sourceTool.run(srcCtx, { sourceId });
@@ -138,6 +236,7 @@ async function runPlanning(
     src.ok ? src.data : { error: src.error }
   );
   if (!src.ok) throw new Error(src.error ?? "Failed to load source.");
+  planningGuard(2, 0, "loading the source");
 
   const sourceOut = src.data as { transcript: string };
 
@@ -149,6 +248,10 @@ async function runPlanning(
     .eq("id", runId);
 
   send("progress", { stage: "Planning angles", pct: 20 });
+  const planGuard = await touchRun(service, runId);
+  if (!planGuard || planGuard === "cancelled") {
+    return { reason: "cancelled", costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
+  }
 
   const planResult = await intelligenceTool.run(srcCtx, { transcript: sourceOut.transcript });
   await recordStep(
@@ -162,11 +265,13 @@ async function runPlanning(
     planResult.ok ? planResult.data : { error: planResult.error }
   );
   if (!planResult.ok) throw new Error(planResult.error ?? "Planning failed.");
+  planningGuard(3, 0, "planning the angles");
 
   const plan = (planResult.data as { plan: ContentPlan }).plan;
   const inputTokens = (planResult.data as { inputTokens: number }).inputTokens ?? 0;
   const outputTokens = (planResult.data as { outputTokens: number }).outputTokens ?? 0;
   const costUnits = Math.round((inputTokens + outputTokens) / 100) / 100;
+  const totalCost = Math.round((costUnits + (run.cost_units ?? 0)) * 100) / 100;
 
   // Persist the plan + each angle as a v4_content_ideas row for the approval UI.
   await service
@@ -176,14 +281,23 @@ async function runPlanning(
       status: "awaiting_approval",
       input_tokens: inputTokens,
       output_tokens: outputTokens,
-      cost_units: costUnits,
-      step_count: 2,
+      cost_units: totalCost,
+      step_count: recordedSteps + 2,
       updated_at: new Date().toISOString()
     })
     .eq("id", runId);
 
+  // Score every angle with the deterministic P3 rubric (objective, grounded,
+  // ranked) and persist the evaluation onto each idea row at ingest time — so
+  // the approval surface and the later P5 strategist see the same server-side
+  // score, not client-supplied rankings.
+  const scoredAngles = plan.angles.map((a) => ({
+    idea: a,
+    evaluation: scoreAngle(a, sourceOut.transcript, plan.angles)
+  }));
+
   await service.from("v4_content_ideas").insert(
-    plan.angles.map((a, i) => ({
+    scoredAngles.map(({ idea: a, evaluation }, i) => ({
       run_id: runId,
       user_id: userId,
       title: a.title,
@@ -192,7 +306,10 @@ async function runPlanning(
       quotes: a.quotes,
       rationale: a.rationale,
       approved: true,
-      sort_order: i
+      sort_order: i,
+      // Objective idea score + grounding/weakness fields (P3) — inside the
+      // existing `evaluation` jsonb column; no schema change.
+      evaluation: evaluation as never
     }))
   );
 
@@ -205,6 +322,8 @@ async function runPlanning(
     input_tokens: inputTokens,
     output_tokens: outputTokens
   });
+
+  return { reason: null, costUnits: totalCost, outputIds: [], completed: 0, attempted: 0 };
 }
 
 // ── Execution phase: approved ideas → drafts → evaluation → done ────────────
@@ -212,7 +331,7 @@ async function runExecution(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   run: AgentRunRow,
   send: Send
-): Promise<void> {
+): Promise<RunOutcome> {
   const { runId, userId, sourceId, mode } = { runId: run.id, userId: run.user_id, sourceId: run.source_id, mode: run.mode as AgentMode };
 
   const transcript = run.transcript_snapshot ?? "";
@@ -232,29 +351,63 @@ async function runExecution(
   const approvedIdeas = ideas ?? [];
   if (approvedIdeas.length === 0) {
     // All angles rejected — a legitimately empty run, not a failure.
-    await service
-      .from("v4_agent_runs")
-      .update({ status: "done", finished_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", runId);
     send("progress", { stage: "No approved angles", pct: 100 });
-    send("done", { ok: true, empty: true });
-    return;
+    return { reason: null, costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
   }
 
-  send("progress", { stage: "Generating drafts", pct: 60 });
+  // Budgets are snapshotted columns on the run row (set at creation from the
+  // plan) — never read from a live plan mid-run, so an in-flight run isn't
+  // re-budgeted by a plan change.
+  const budget: BudgetSnapshot = {
+    maxSteps: run.max_steps ?? 50,
+    maxCostUnits: run.max_cost_units ?? 2500,
+    maxRuntimeSeconds: run.max_runtime_s ?? 1800
+  };
+  const recordedSteps = await countRecordedSteps(service, runId);
+  const startedAtMs = run.started_at ? Date.parse(run.started_at) : Date.now();
+  const estGenCost = estimateGenerationCost(transcript);
 
-  const outputIds: string[] = [];
-  const FORMARTS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script"];
+  // Partial resume: any drafts a previous execution already wrote stay linked
+  // to this run.
+  const outputIds = [...(run.output_ids ?? [])];
   let estimatedTokens = 0;
-  let steps = 0;
+  let currentCost = run.cost_units ?? 0;
+  let localSteps = 0;
+  let attempted = 0;
+  let completed = 0;
+
+  const FORMARTS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script"];
+
+  const guard = (inFlightSteps: number, inFlightCost: number): StopReason =>
+    budgetViolation(
+      budget,
+      { steps: recordedSteps + localSteps, costUnits: currentCost, startedAtMs },
+      Date.now(),
+      { steps: inFlightSteps, costUnits: inFlightCost }
+    );
+
+  send("progress", { stage: "Generating drafts", pct: 60 });
 
   for (const idea of approvedIdeas) {
     const formats = (idea.suggested_formats ?? []).filter((f: string) =>
       FORMARTS.includes(f as OutputFormat)
     ) as OutputFormat[];
     for (const format of formats) {
+      // 0) Heartbeat + cancellation check before each output. A cancelled run
+      //    stops cleanly here; whatever drafts already arrived are kept.
+      const control = await touchRun(service, runId);
+      if (!control || control === "cancelled") {
+        return { reason: "cancelled", costUnits: currentCost, outputIds, completed, attempted };
+      }
+
+      // Budget guard before the next LLM call — trip BEFORE spending.
+      const violation = guard(1, estGenCost);
+      if (violation) {
+        return { reason: violation, costUnits: currentCost, outputIds, completed, attempted };
+      }
+
       // 1) Generate
-      send("progress", { stage: `Generating ${format}`, pct: 60 + Math.round((steps / (approvedIdeas.length * 3)) * 25) });
+      send("progress", { stage: `Generating ${format}`, pct: 60 + Math.round((localSteps / (approvedIdeas.length * 3)) * 25) });
       const gen = await generationTool.run(ctx, {
         sourceId,
         format,
@@ -262,7 +415,8 @@ async function runExecution(
         angleTitle: idea.title,
         angleDescription: idea.description ?? undefined
       });
-      steps += 1;
+      localSteps += 1;
+      attempted += 1;
       await recordStep(
         service,
         runId,
@@ -276,13 +430,19 @@ async function runExecution(
       if (!gen.ok) continue; // one bad draft doesn't sink the run
 
       const { outputId, content } = gen.data as { outputId: string; content: string };
-      outputIds.push(outputId);
+      if (!outputIds.includes(outputId)) outputIds.push(outputId);
+      completed += 1;
       estimatedTokens += estimateGenerationTokens(transcript, content);
+      currentCost = Math.round((currentCost + estimateGenerationTokens(transcript, content) / 100) * 100) / 100;
 
-      // 2) Evaluate
+      // 2) Evaluate (deterministic — no LLM, but counts as a step)
+      const evalGuard = guard(1, 0);
+      if (evalGuard) {
+        return { reason: evalGuard, costUnits: currentCost, outputIds, completed, attempted };
+      }
       send("progress", { stage: `Rating ${format}`, pct: 85 });
       const review = await reviewTool.run(ctx, { format, transcript, content });
-      steps += 1;
+      localSteps += 1;
       await recordStep(
         service,
         runId,
@@ -299,6 +459,10 @@ async function runExecution(
 
       // 3) Bounded single revision (execute/automate only) — never loop.
       if (rv.evaluation.weak && rv.canRevise && rv.revisionInstruction) {
+        const revGuard = guard(1, estGenCost);
+        if (revGuard) {
+          return { reason: revGuard, costUnits: currentCost, outputIds, completed, attempted };
+        }
         send("progress", { stage: `Revising ${format}`, pct: 92 });
         const revise = await generationTool.run(ctx, {
           sourceId,
@@ -309,7 +473,7 @@ async function runExecution(
           revisionInstruction: rv.revisionInstruction,
           outputId
         });
-        steps += 1;
+        localSteps += 1;
         await recordStep(
           service,
           runId,
@@ -324,7 +488,7 @@ async function runExecution(
           // Re-evaluate the revised draft once; whatever it scores stands.
           const revisedContent = (revise.data as { content: string }).content;
           const re = await reviewTool.run(ctx, { format, transcript, content: revisedContent, isRevision: true });
-          steps += 1;
+          localSteps += 1;
           await recordStep(
             service,
             runId,
@@ -350,30 +514,58 @@ async function runExecution(
 
   send("progress", { stage: "Finalising", pct: 97 });
 
-  const costUnits = (run.cost_units ?? 0) + Math.round(estimatedTokens / 100) / 100;
+  return {
+    reason: null,
+    costUnits: Math.round((currentCost) * 100) / 100,
+    outputIds,
+    completed,
+    attempted
+  };
+}
 
-  await service
-    .from("v4_agent_runs")
-    .update({
-      status: "done",
-      output_ids: outputIds,
-      step_count: steps,
-      cost_units: costUnits,
-      finished_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", runId);
+// Central finalizer — done / cancelled / budget-stop all land here so the
+// partial-completion rule is one code path: whatever completed work exists is
+// preserved on the run and in the library.
+async function finalizeRun(
+  service: Awaited<ReturnType<typeof createServiceClient>>,
+  runId: string,
+  outcome: RunOutcome,
+  phase: "planning" | "execution"
+): Promise<void> {
+  const stepCount = await countRecordedSteps(service, runId);
+  const now = new Date().toISOString();
 
-  send("progress", { stage: "Ready", pct: 100 });
-  send("done", { ok: true, outputs: outputIds.length });
+  const common = {
+    step_count: stepCount,
+    cost_units: outcome.costUnits,
+    output_ids: outcome.outputIds,
+    updated_at: now,
+    finished_at: now
+  };
 
-  log.info("agent.execution_done", {
-    run_id: runId,
-    user_id: userId,
-    ideas: approvedIdeas.length,
-    outputs: outputIds.length,
-    cost_units: costUnits
-  });
+  let patch: Record<string, unknown>;
+  if (outcome.reason === null) {
+    patch = { ...common, status: "done", error_message: null } as never;
+  } else if (outcome.reason === "cancelled") {
+    const phaseText = phase === "planning" ? "planning angles" : "generating drafts";
+    patch = {
+      ...common,
+      status: "cancelled",
+      error_message: `Cancelled by you while ${phaseText}. Completed drafts are saved in your library.`
+    } as never;
+  } else {
+    const label = outcome.reason === "steps" ? "step" : outcome.reason === "cost" ? "cost" : "runtime";
+    patch = {
+      ...common,
+      status: "failed",
+      error_message: `Run stopped at its ${label} budget; ${outcome.completed} of ${outcome.attempted} planned draft${outcome.attempted === 1 ? "" : "s"} completed and saved in your library.`
+    } as never;
+  }
+
+  const { error } = await service.from("v4_agent_runs").update(patch as never).eq("id", runId);
+  if (error) {
+    log.error("agent.finalize_failed", new Error(error.message), { run_id: runId });
+  }
 }
 
 // ── Public entry point: claim then dispatch. Throws on unrecoverable failure. ─
@@ -399,15 +591,74 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
         .eq("id", runId);
     }
 
-    if (phase === "planning") {
-      await runPlanning(service, run, send);
+    const outcome = phase === "planning" ? await runPlanning(service, run, send) : await runExecution(service, run, send);
+
+    await finalizeRun(service, runId, outcome, phase);
+
+    if (outcome.reason === null) {
+      send("progress", { stage: "Ready", pct: 100 });
+      send("done", {
+        ok: true,
+        stopped: null,
+        outputs: outcome.outputIds.length,
+        completed: outcome.completed,
+        cancelled: false
+      });
     } else {
-      await runExecution(service, run, send);
+      send("progress", { stage: "Stopping", pct: 100 });
+      send("done", {
+        ok: true,
+        stopped: outcome.reason,
+        outputs: outcome.outputIds.length,
+        completed: outcome.completed,
+        cancelled: outcome.reason === "cancelled"
+      });
+      log.info("agent.run_stopped", {
+        run_id: runId,
+        user_id: run.user_id,
+        reason: outcome.reason,
+        completed: outcome.completed,
+        attempted: outcome.attempted,
+        cost_units: outcome.costUnits
+      });
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown agent failure";
+    const message = describeError(err);
+    const transient = isTransientError(err);
+    const canRetry = transient && (run.attempt ?? 0) < MAX_PHASE_ATTEMPTS;
 
-    await recordStep(service, runId, run.user_id, "planning", "failed", "Run failed", {}, { error: message }).catch(() => {});
+    const failedKind = phase === "planning" ? "planning" : "generation";
+    await recordStep(
+      service,
+      runId,
+      run.user_id,
+      failedKind,
+      "failed",
+      "Run failed",
+      {},
+      { error: message.slice(0, 500), retryable: transient }
+    ).catch(() => {});
+
+    if (canRetry) {
+      // Transient failure: keep the run claimable (status stays planning /
+      // executing) so the next process POST retries. Bounded by attempt count.
+      await service
+        .from("v4_agent_runs")
+        .update({ error_message: message.slice(0, 300), updated_at: new Date().toISOString() })
+        .eq("id", runId);
+
+      send("error", { error: message, retryable: true });
+      log.warn("agent.run_transient", {
+        run_id: runId,
+        user_id: run.user_id,
+        attempt: run.attempt,
+        phase,
+        error: message
+      });
+      return;
+    }
+
+    // Permanent (or retries exhausted): fail the run.
     await service
       .from("v4_agent_runs")
       .update({
@@ -418,14 +669,16 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
       })
       .eq("id", runId);
 
-    send("error", { error: message });
+    send("error", { error: message, retryable: false });
     log.error("agent.run_failed", err instanceof Error ? err : new Error(message), {
       run_id: runId,
       user_id: run.user_id,
-      phase
+      attempt: run.attempt,
+      phase,
+      retryable: false
     });
     throw err;
   }
 }
 
-export { STALE_AFTER_MS };
+export { STALE_AFTER_MS, HEARTBEAT_STALE_MS };

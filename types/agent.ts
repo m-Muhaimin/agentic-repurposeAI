@@ -38,6 +38,22 @@ export interface EvaluationResult {
   notes: string[];
 }
 
+// P3 idea-scoring result: an objective, deterministic rating of a *proposed
+// angle* (before generation), persisted on v4_content_ideas.evaluation. This
+// is deliberately distinct from EvaluationResult, which rates a *generated
+// draft*. `weakness` is null when no dimension fell below the flag threshold.
+export interface IdeaEvaluation {
+  score: number; // 0..1 weighted, rounded to 2dp
+  grounding: number; // traces to the transcript (0..1)
+  distinctness: number; // differs from sibling angles (0..1)
+  specificity: number; // concrete / hook-worthy title (0..1)
+  flags: IdeaWeakness[];
+  weakness: string | null;
+  notes: string[];
+}
+
+export type IdeaWeakness = "grounding" | "distinctness" | "specificity";
+
 // ── Step kinds in the run state machine ─────────────────────────────────────
 export type AgentStepKind =
   | "planning"
@@ -137,7 +153,19 @@ export interface AgentRunRow {
   updated_at: string;
   started_at: string | null;
   finished_at: string | null;
+  // P2 run budgets — snapshotted from the user's plan at creation (server-side
+  // only, never client-supplied). Enforced by the orchestrator; a hit parks the
+  // run with whatever completed work it already produced.
+  max_steps: number;
+  max_cost_units: number;
+  max_runtime_s: number;
+  // P2 heartbeat — touched by the worker between steps so a dead worker's run
+  // can be re-claimed on heartbeat staleness instead of parking forever.
+  heartbeat_at: string | null;
 }
+
+// Why a run stopped short of `done`. Null = normal completion.
+export type StopReason = "steps" | "cost" | "runtime" | "cancelled" | null;
 
 // Lightweight list row returned by GET /api/agent/runs (has the joined title).
 export interface AgentRunSummary {
@@ -188,7 +216,17 @@ export interface BrandVoiceProfile {
   examples: string[];
 }
 
+// What kind of durable signal this is. `edit` = the user hand-edited a draft
+// (edit feedback); `preference` = the user changed a brand/mode preference
+// explicitly; `angle_decision` = the user kept/rejected an idea at the approval
+// gate. All are stored append-only in v4_agent_preferences.edit_signals and
+// surfaced (never auto-applied) through the confidence-gated confirm loop.
+export type SignalKind = "edit" | "preference" | "angle_decision";
+
 export interface EditSignal {
+  kind: SignalKind;
+  // The thing the signal is about: an output id (edit), a preference field
+  // (preference), or an idea title (angle_decision).
   outputId: string;
   whatChanged: string; // tonal note, sentence-level hint
   at: string;

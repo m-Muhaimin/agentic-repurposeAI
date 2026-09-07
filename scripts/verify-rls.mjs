@@ -71,6 +71,19 @@ function maybeCheck(name, res, okForRows, detail) {
   check(name, !res.error && okForRows(res.data), res.error?.message ?? detail);
 }
 
+// Negative write assertions (service-role-only tables): a client INSERT must be
+// BLOCKED — that surfaces as an RLS error (PASS) or an empty result set (PASS),
+// never as a written row. Distinguish from maybeCheck above, which treats any
+// error as a failure.
+function maybeBlockedWrite(name, res, detail) {
+  if (res.error && resolvesMissing(res.error)) {
+    console.log(`  SKIP  ${name} — migration 0004 not applied`);
+    return;
+  }
+  const blocked = Boolean(res.error) || !Array.isArray(res.data) || res.data.length === 0;
+  check(name, blocked, res.error?.message ?? detail);
+}
+
 async function signIn(user) {
   const client = anonClient(user.email, user.password);
   const { data, error } = await client.auth.signInWithPassword(user);
@@ -197,10 +210,9 @@ async function main() {
     (d) => Array.isArray(d) && d.length === 0
   );
   const usageWrite = await a.from("usage_events").insert({ user_id: aId, action: "reserve" }).select();
-  maybeCheck(
+  maybeBlockedWrite(
     "A cannot write usage_events directly (service role only)",
-    usageWrite,
-    (d) => !Array.isArray(d) || d.length === 0
+    usageWrite
   );
   const subB = await b.from("subscriptions").select("*").eq("user_id", aId);
   maybeCheck(
@@ -209,10 +221,9 @@ async function main() {
     (d) => Array.isArray(d) && d.length === 0
   );
   const subWrite = await a.from("subscriptions").insert({ user_id: aId, plan: "creator" }).select();
-  maybeCheck(
+  maybeBlockedWrite(
     "A cannot create a subscription client-side (service role only)",
-    subWrite,
-    (d) => !Array.isArray(d) || d.length === 0
+    subWrite
   );
   const subEv = await a.from("subscription_events").select("*");
   maybeCheck(

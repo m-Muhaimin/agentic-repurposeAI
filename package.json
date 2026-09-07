@@ -9,7 +9,9 @@
     "lint": "next lint",
     "verify:rls": "node scripts/verify-rls.mjs",
     "verify:agentic": "node scripts/verify-agentic.mjs",
-    "db:types": "node scripts/gen-types.mjs"
+    "db:types": "node scripts/gen-types.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -29,6 +31,8 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.4",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
   }
 }

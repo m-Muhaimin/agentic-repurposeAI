@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { AGENT_MODES, type AgentMode } from "@/types/agent";
 import { DEFAULT_MODE } from "@/lib/agent/permissions";
 import { ensureAgentPreferences } from "@/lib/agent/memory";
+import { resolvePlan } from "@/lib/billing/entitlements";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/runs — start a new agentic run for a source.
@@ -49,10 +50,23 @@ export async function POST(request: Request) {
   // mutable fields stay user-gated).
   await ensureAgentPreferences(user.id);
 
+  // Budget snapshot: read server-side from the user's plan and persist it on
+  // the run, so an in-flight run is never re-budgeted by a later plan change.
+  // The client's mode request changes what the agent MAY do, never how much.
+  const plan = await resolvePlan(user.id);
+  const agentBudget = plan.limits.agent;
+
   const { data: run, error } = await service
     .from("v4_agent_runs")
-    .insert({ user_id: user.id, source_id: sourceId, mode })
-    .select("id, status, mode, created_at")
+    .insert({
+      user_id: user.id,
+      source_id: sourceId,
+      mode,
+      max_steps: agentBudget.maxSteps,
+      max_cost_units: agentBudget.maxCostUnits,
+      max_runtime_s: agentBudget.maxRuntimeSeconds
+    })
+    .select("id, status, mode, created_at, max_steps, max_cost_units, max_runtime_s")
     .single();
 
   if (error) {
