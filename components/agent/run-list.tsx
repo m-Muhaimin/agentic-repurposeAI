@@ -5,11 +5,11 @@ import { Card, CardHeader } from "@/components/card";
 import type { AgentRunSummary, RunStatus } from "@/types/agent";
 
 const RUN_LABEL: Record<RunStatus, string> = {
-  created: "Created",
+  created: "Preparing",
   planning: "Planning",
-  awaiting_approval: "Needs approval",
+  awaiting_approval: "Needs your review",
   executing: "Generating",
-  evaluating: "Evaluating",
+  evaluating: "Reviewing quality",
   done: "Ready",
   failed: "Failed",
   cancelled: "Cancelled"
@@ -31,13 +31,16 @@ function inFlight(status: RunStatus): boolean {
 }
 
 // Polls /api/agent/runs and lets the user pick a run. Light polling keeps the
-// list fresh while a worker advances the durable run state.
+// list fresh while a worker advances the durable run state. The list reads as a
+// series of pieces of work, not operations: source + session goal + plain state.
 export default function RunList({
   runId,
+  goals,
   onSelect,
   onKick
 }: {
   runId: string | null;
+  goals: Record<string, string>;
   onSelect: (id: string) => void;
   onKick: (id: string) => void;
 }) {
@@ -78,6 +81,9 @@ export default function RunList({
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{r.sourceTitle}</span>
+                  {goals[r.id] && (
+                    <span className="block truncate text-xs italic text-theme-text-secondary">“{goals[r.id]}”</span>
+                  )}
                   <span className="block text-xs text-theme-text-secondary">
                     {new Date(r.created_at).toLocaleString(undefined, { month: "short", day: "numeric" })} · {r.mode}
                   </span>

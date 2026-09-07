@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/card";
 import type { AgentRunRow, ContentIdea, EditSignal, RunStatus } from "@/types/agent";
-import { stepSpendFromOutput, aggregateRunSpend, formatCostUsd, formatCostUnits, spendSourceLabel, type StepSpend } from "@/lib/agent/spend";
+import { stepSpendFromOutput, aggregateRunSpend, formatCostUsd, formatCostUnits, spendSourceLabel, type MonthlyAgentSpend, type StepSpend } from "@/lib/agent/spend";
+import { budgetSummaryLine } from "@/lib/agent/plan-presentation";
 import PlanView from "./plan-view";
 import Timeline from "./timeline";
 
@@ -47,6 +48,7 @@ interface RunDetailData {
   }>;
   outputs: Array<{ id: string; format: string; content: string; created_at: string }>;
   signals: EditSignal[];
+  monthlySpend: MonthlyAgentSpend | null;
 }
 
 const IN_FLIGHT: RunStatus[] = ["created", "planning", "executing", "evaluating"];
@@ -56,7 +58,15 @@ const FORMAT_LABEL: Record<string, string> = {
   shortform_script: "Short-form script"
 };
 
-export default function RunDetail({ runId, onChange }: { runId: string; onChange: () => void }) {
+export default function RunDetail({
+  runId,
+  onChange,
+  goal
+}: {
+  runId: string;
+  onChange: () => void;
+  goal?: string;
+}) {
   const [data, setData] = useState<RunDetailData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +118,7 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
     }
   }
 
-  async function approve(decisions: { id: string; approved: boolean }[]) {
+  async function approve(decisions: { id: string; approved: boolean; title?: string; description?: string }[]) {
     setBusy(true);
     setError(null);
     try {
@@ -152,7 +162,7 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
     return <Card><p className="px-5 py-8 text-sm text-theme-text-secondary">Loading run…</p></Card>;
   }
 
-  const { run, ideas, steps, outputs, signals } = data;
+  const { run, ideas, steps, outputs, signals, monthlySpend } = data;
   const waiting = run.status === "awaiting_approval";
 
   // P9: Extract per-step spend data from step outputs (spend events recorded
@@ -169,9 +179,17 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
     stepSpends
   );
 
+  const approvedIdeas = ideas.filter((i) => i.approved).length;
+
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {goal && (
+        <p className="text-xs text-theme-text-secondary">
+          Objective: <span className="text-theme-text-primary">“{goal}”</span>
+        </p>
+      )}
 
       {busy && <p className="text-sm text-theme-text-secondary">Working… the run survives restarts; this screen catches up from the DB.</p>}
 
@@ -184,7 +202,12 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
             onApprove={approve}
             onReject={rejectAll}
           />
-          <Timeline steps={steps} />
+          <Timeline
+            steps={steps}
+            status={run.status}
+            totalIdeas={ideas.length}
+            approvedIdeas={approvedIdeas}
+          />
         </>
       ) : (
         <>
@@ -242,7 +265,12 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
             </Card>
           )}
 
-          <Timeline steps={steps} />
+          <Timeline
+            steps={steps}
+            status={run.status}
+            totalIdeas={ideas.length}
+            approvedIdeas={approvedIdeas}
+          />
 
           {outputs.length > 0 && (
             <Card>
@@ -294,67 +322,92 @@ export default function RunDetail({ runId, onChange }: { runId: string; onChange
             </Card>
           )}
 
-          {/* ── P8+P9: Per-run budget + spend ────────────────────────────── */}
+          {/* ── P8+P9: Run budget (collapsed; full metrics behind "View details") ── */}
           <Card>
             <CardHeader
-              title="Run budget"
-              description="Snapshotted from your plan at run creation — enforced by the orchestrator."
+              title="Budget"
+              description="This run's allowance in plain terms."
             />
-            <div className="grid grid-cols-3 gap-4 px-5 py-4 text-xs">
-              <div>
-                <p className="text-theme-text-secondary">Steps</p>
-                <p className="mt-0.5 font-medium">{run.step_count} / {run.max_steps}</p>
-              </div>
-              <div>
-                <p className="text-theme-text-secondary">Cost units</p>
-                <p className="mt-0.5 font-medium">{formatCostUnits(run.cost_units)} / {run.max_cost_units}</p>
-              </div>
-              <div>
-                <p className="text-theme-text-secondary">Runtime</p>
-                <p className="mt-0.5 font-medium">
-                  {run.max_runtime_s}s max
-                </p>
-              </div>
-            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-theme-text-secondary">
+                {run.cost_units > 0
+                  ? budgetSummaryLine({
+                      costUsd: spendSummary.estimatedCostUsd,
+                      maxCostUnits: run.max_cost_units || null
+                    })
+                  : "No spend recorded yet"}
+              </p>
 
-            {/* P9: Estimated spend (token-derived — never claimed as real $) */}
-            {spendSummary.hasActualTokens && (
-              <div className="border-t border-theme-divider px-5 py-3">
-                <p className="text-xs font-medium text-theme-text-secondary">Estimated spend</p>
-                <p className="mt-0.5 text-xs text-theme-text-secondary">
-                  {formatCostUsd(spendSummary.estimatedCostUsd)} est. · {spendSummary.totalInputTokens.toLocaleString()} input + {spendSummary.totalOutputTokens.toLocaleString()} output tokens · <span className="italic">published-rate estimate</span>
+              {monthlySpend && monthlySpend.runsThisMonth > 0 && (
+                <p className="mt-1 text-xs text-theme-text-secondary">
+                  {monthlySpend.runsThisMonth} run{monthlySpend.runsThisMonth === 1 ? "" : "s"} this month ·{" "}
+                  est. {formatCostUsd(monthlySpend.estimatedCostUsd)} ·{" "}
+                  {monthlySpend.totalInputTokens.toLocaleString()} input +{" "}
+                  {monthlySpend.totalOutputTokens.toLocaleString()} output tokens
                 </p>
-              </div>
-            )}
+              )}
 
-            {run.cost_units > 0 && run.max_cost_units > 0 && (
-              <div className="border-t border-theme-divider px-5 py-3">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                  <div
-                    className="h-full rounded-full bg-primary-500"
-                    style={{ width: `${spendSummary.budgetPercentUsed}%` }}
-                  />
+              <details className="group mt-3 border-t border-theme-divider pt-3">
+                <summary className="cursor-pointer list-none text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary">
+                  <span className="underline">View details</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <p className="text-theme-text-secondary">Steps</p>
+                    <p className="mt-0.5 font-medium">{run.step_count} / {run.max_steps}</p>
+                  </div>
+                  <div>
+                    <p className="text-theme-text-secondary">Cost units</p>
+                    <p className="mt-0.5 font-medium">{formatCostUnits(run.cost_units)} / {run.max_cost_units}</p>
+                  </div>
+                  <div>
+                    <p className="text-theme-text-secondary">Runtime</p>
+                    <p className="mt-0.5 font-medium">
+                      {run.max_runtime_s}s max
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* P9: Per-step breakdown (cheapest path) */}
-            {stepSpends.length > 0 && (
-              <div className="border-t border-theme-divider px-5 py-3">
-                <p className="text-xs font-medium text-theme-text-secondary">Per-step token usage</p>
-                <ul className="mt-1.5 space-y-1">
-                  {stepSpends.map((s) => (
-                    <li key={s.stepId} className="flex items-center justify-between text-xs text-theme-text-secondary">
-                      <span className="truncate">{s.label ?? s.kind}</span>
-                      <span className="shrink-0 ml-2">
-                        {s.inputTokens.toLocaleString()}+{s.outputTokens.toLocaleString()} tokens
-                        <span className="ml-1 italic">({spendSourceLabel(s.source)})</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                {run.cost_units > 0 && run.max_cost_units > 0 && (
+                  <div className="mt-3">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className="h-full rounded-full bg-primary-500"
+                        style={{ width: `${spendSummary.budgetPercentUsed}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* P9: Estimated spend (token-derived — never claimed as real $) */}
+                {spendSummary.hasActualTokens && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-theme-text-secondary">Estimated spend</p>
+                    <p className="mt-0.5 text-xs text-theme-text-secondary">
+                      {formatCostUsd(spendSummary.estimatedCostUsd)} est. · {spendSummary.totalInputTokens.toLocaleString()} input + {spendSummary.totalOutputTokens.toLocaleString()} output tokens · <span className="italic">published-rate estimate</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* P9: Per-step breakdown (cheapest path) */}
+                {stepSpends.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-theme-text-secondary">Per-step token usage</p>
+                    <ul className="mt-1.5 space-y-1">
+                      {stepSpends.map((s) => (
+                        <li key={s.stepId} className="flex items-center justify-between text-xs text-theme-text-secondary">
+                          <span className="truncate">{s.label ?? s.kind}</span>
+                          <span className="shrink-0 ml-2">
+                            {s.inputTokens.toLocaleString()}+{s.outputTokens.toLocaleString()} tokens
+                            <span className="ml-1 italic">({spendSourceLabel(s.source)})</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </details>
+            </div>
           </Card>
 
           {IN_FLIGHT.includes(run.status) && (

@@ -1,6 +1,6 @@
-// Pure formatters for the strategy panel — no JSX, no I/O, fully testable.
-// The strategy-panel.tsx component imports these; vitest can import them
-// without needing the JSX transform.
+// Pure formatters shared by the agent strategy surfaces — no JSX, no I/O,
+// fully testable. Imported by opportunity-feed.tsx and plan-view.tsx; vitest
+// can import them without needing the JSX transform.
 
 import type { OutputFormat } from "@/types/agent";
 

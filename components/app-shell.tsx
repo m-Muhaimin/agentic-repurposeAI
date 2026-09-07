@@ -8,7 +8,7 @@ import Logo from "./logo";
 
 const NAV_GROUPS = [
   {
-    label: "Workspace",
+    label: "Home",
     items: [
       {
         label: "Overview",
@@ -30,45 +30,12 @@ const NAV_GROUPS = [
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
           </svg>
         )
-      },
-      {
-        label: "Repurpose",
-        href: "/upload",
-        icon: (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-[18px]"
-            aria-hidden="true"
-          >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        )
-      },
-      {
-        label: "Content Library",
-        href: "/library",
-        icon: (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-[18px]"
-            aria-hidden="true"
-          >
-            <path d="m12 2 10 5-10 5L2 7 12 2Z" />
-            <path d="m2 17 10 5 10-5" />
-            <path d="m2 12 10 5 10-5" />
-          </svg>
-        )
-      },
+      }
+    ]
+  },
+  {
+    label: "Create",
+    items: [
       {
         label: "Agent",
         href: "/agent",
@@ -91,7 +58,79 @@ const NAV_GROUPS = [
         )
       },
       {
-        label: "Observe",
+        label: "New content",
+        href: "/upload",
+        icon: (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[18px]"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        )
+      }
+    ]
+  },
+  {
+    label: "Library",
+    items: [
+      {
+        label: "Content library",
+        href: "/library",
+        icon: (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[18px]"
+            aria-hidden="true"
+          >
+            <path d="m12 2 10 5-10 5L2 7 12 2Z" />
+            <path d="m2 17 10 5 10-5" />
+            <path d="m2 12 10 5 10-5" />
+          </svg>
+        )
+      }
+    ]
+  },
+  {
+    label: "Strategy",
+    items: [
+      {
+        label: "Content calendar",
+        href: "/content/calendar",
+        icon: (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[18px]"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+        )
+      }
+    ]
+  },
+  {
+    label: "Insights",
+    items: [
+      {
+        label: "AI learnings",
         href: "/agent/observe",
         icon: (
           <svg
@@ -112,10 +151,10 @@ const NAV_GROUPS = [
     ]
   },
   {
-    label: "Configuration",
+    label: "Brand",
     items: [
       {
-        label: "Brand & Voice",
+        label: "Brand & voice",
         href: "/branding",
         icon: (
           <svg
@@ -132,9 +171,14 @@ const NAV_GROUPS = [
             <path d="M1 14h6M9 8h6M17 16h6" />
           </svg>
         )
-      },
+      }
+    ]
+  },
+  {
+    label: "Connect",
+    items: [
       {
-        label: "Connections",
+        label: "Channels",
         href: "/connections",
         icon: (
           <svg
@@ -160,7 +204,7 @@ const NAV_GROUPS = [
     label: "Account",
     items: [
       {
-        label: "Plan & Usage",
+        label: "Plan & usage",
         href: "/settings/usage",
         icon: (
           <svg

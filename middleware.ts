@@ -42,6 +42,7 @@ export async function middleware(request: NextRequest) {
     "/library",
     "/agent",
     "/settings",
+    "/content",
     "/reset-password",
     "/api/account/delete",
     "/api/account/export"

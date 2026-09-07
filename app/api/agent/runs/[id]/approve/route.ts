@@ -6,12 +6,18 @@ import { log } from "@/lib/logger";
 // POST /api/agent/runs/[id]/approve
 // The human gate of Stage 1's Assist mode: the user decides which planned angles
 // survive. Accepts a body like:
-//   { approval: "approved" | "rejected", ideas: [{ id, approved }] }
-// Writes the idea flags, records the decision on the run, and moves the run to
-// `executing` (or `cancelled` if every angle was rejected). A later
-// POST /api/agent/process picks it up.
+//   { approval: "approved" | "rejected", ideas: [{ id, approved, title?, description? }] }
+// `title`/`description` are optional additive overrides — the user's plan edits
+// from the approval surface. Writes the idea flags, records the decision on the
+// run, and moves the run to `executing` (or `cancelled` if every angle was
+// rejected). A later POST /api/agent/process picks it up.
 
-type IdeaDecision = { id: string; approved: boolean };
+interface IdeaDecision {
+  id: string;
+  approved: boolean;
+  title?: string;
+  description?: string;
+}
 
 function isIdeaDecisions(v: unknown): v is IdeaDecision[] {
   return (
@@ -21,7 +27,10 @@ function isIdeaDecisions(v: unknown): v is IdeaDecision[] {
         typeof i === "object" &&
         i !== null &&
         typeof (i as IdeaDecision).id === "string" &&
-        typeof (i as IdeaDecision).approved === "boolean"
+        typeof (i as IdeaDecision).approved === "boolean" &&
+        ((i as IdeaDecision).title === undefined || typeof (i as IdeaDecision).title === "string") &&
+        ((i as IdeaDecision).description === undefined ||
+          typeof (i as IdeaDecision).description === "string")
     )
   );
 }
@@ -60,12 +69,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "ideas must be a non-empty array" }, { status: 400 });
   }
 
-  // Persist the user's per-angle call.
+  // Persist the user's per-angle call (approved flag + optional plan edits).
   if (isIdeaDecisions(ideas)) {
     for (const idea of ideas) {
+      const update: Record<string, string | boolean> = {
+        approved: idea.approved,
+        updated_at: new Date().toISOString()
+      };
+      // Plan edits only apply to angles the user decided to keep — a skipped
+      // angle's title/description edits are discarded (they won't be generated).
+      if (idea.approved) {
+        if (typeof idea.title === "string" && idea.title.trim().length > 0) {
+          update.title = idea.title.trim();
+        }
+        if (typeof idea.description === "string" && idea.description.trim().length > 0) {
+          update.description = idea.description.trim();
+        }
+      }
       const { error: ideaErr } = await service
         .from("v4_content_ideas")
-        .update({ approved: idea.approved, updated_at: new Date().toISOString() })
+        .update(update)
         .eq("id", idea.id)
         .eq("run_id", id)
         .eq("user_id", user.id);

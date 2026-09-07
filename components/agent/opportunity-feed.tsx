@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardHeader } from "@/components/card";
 import type { AgentMode, OutputFormat } from "@/types/agent";
 import { AGENT_MODES, AGENT_MODE_LABEL } from "@/types/agent";
 import { formatScore, formatHeadroom, formatExclusionCode, FORMAT_LABEL, type BudgetHeadroom } from "@/lib/agent/strategy-panel-helpers";
 import { formatCostUsd, spendSourceLabel, type MonthlyAgentSpend } from "@/lib/agent/spend";
 
-// ── Types matching GET/POST /api/agent/strategy/next ──────────────────────
+// ── Types matching GET /api/agent/strategy/next ─────────────────────────────
 
 interface Candidate {
   sourceId: string;
@@ -40,12 +40,17 @@ interface StrategyData {
   monthlySpend: MonthlyAgentSpend | null;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────
+// The passive "what should I work on next?" surface. Loads the deterministic
+// strategy next snapshot (real source/idea/budget data — no LLM on GET) and
+// turns each candidate into a human-scale opportunity the user can act on.
+// Nothing here claims outcomes that don't exist yet; empty states stay honest.
 
-export default function StrategyPanel({
-  onStartRun
+export default function OpportunityFeed({
+  onStartRun,
+  focusKey
 }: {
   onStartRun: (sourceId: string, mode: AgentMode) => void;
+  focusKey: number;
 }) {
   const [data, setData] = useState<StrategyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +58,8 @@ export default function StrategyPanel({
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AgentMode>("assist");
   const [showAlternatives, setShowAlternatives] = useState(false);
-  const [publishing, setPublishing] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const fetchStrategy = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -79,23 +85,24 @@ export default function StrategyPanel({
     fetchStrategy(false);
   }, [fetchStrategy]);
 
-  async function publishNext() {
-    if (!data?.recommended || publishing) return;
-    setPublishing(true);
+  // Bring the feed into focus when the composer's "Find opportunities" intent
+  // asks for it (e.g. user toggled the intent or a text mention).
+  useEffect(() => {
+    if (focusKey > 0) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [focusKey]);
+
+  async function runFrom(sourceId: string) {
+    if (startingId) return;
+    setStartingId(sourceId);
     setError(null);
     try {
-      // Refresh strategy first to ensure headroom is current
-      const res = await fetch("/api/agent/strategy/next");
-      if (res.ok) {
-        const body = (await res.json()) as StrategyData;
-        if (body.ok) setData(body);
-      }
-      // Start the run — onStartRun calls the existing POST /api/agent/runs
-      onStartRun(data.recommended.sourceId, mode);
+      onStartRun(sourceId, mode);
     } catch {
       setError("Failed to start run.");
     } finally {
-      setPublishing(false);
+      setStartingId(null);
     }
   }
 
@@ -103,10 +110,11 @@ export default function StrategyPanel({
   const headroom = data?.headroom;
 
   return (
-    <Card>
+    <div ref={cardRef}>
+      <Card>
       <CardHeader
-        title="What should I publish next?"
-        description={refreshing ? "Refreshing…" : "Based on your sources, scores, and budget."}
+        title="What should I work on next?"
+        description={refreshing ? "Refreshing…" : "Agent recommendations from your real content, scores, and budget."}
         action={
           <button
             type="button"
@@ -127,25 +135,24 @@ export default function StrategyPanel({
         </div>
       )}
 
-      {!loading && error && (
-        <p className="px-5 py-4 text-sm text-red-600">{error}</p>
-      )}
+      {!loading && error && <p className="px-5 py-4 text-sm text-red-600">{error}</p>}
 
       {!loading && !error && data && (
         <>
-          {/* ── Recommendation ────────────────────────────────────────── */}
+          {/* ── Top recommendation as an opportunity card ─────────────────── */}
           {rec ? (
             <div className="px-5 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{rec.sourceTitle}</p>
+                  <span className="badge bg-amber-50 text-amber-700">Reuse opportunity</span>
+                  <p className="mt-2 text-sm font-medium">{rec.sourceTitle}</p>
                   {rec.angleTitle && (
                     <p className="mt-0.5 text-xs text-theme-text-secondary">
                       Angle: {rec.angleTitle}
                     </p>
                   )}
                 </div>
-                <span className="badge bg-neutral-900 text-white">{formatScore(rec.score)}</span>
+                <span className="badge bg-neutral-900 text-white shrink-0">{formatScore(rec.score)}</span>
               </div>
 
               {rec.formats.length > 0 && (
@@ -174,14 +181,15 @@ export default function StrategyPanel({
             </p>
           )}
 
-          {/* ── Rationale ──────────────────────────────────────────────── */}
+          {/* ── Rationale ────────────────────────────────────────────────── */}
           {data.rationale && (
             <div className="border-t border-theme-divider px-5 py-3">
-              <p className="text-xs text-theme-text-secondary">{data.rationale}</p>
+              <p className="text-xs font-medium text-theme-text-secondary">Why this next</p>
+              <p className="mt-0.5 text-xs text-theme-text-secondary">{data.rationale}</p>
             </div>
           )}
 
-          {/* ── Headroom ───────────────────────────────────────────────── */}
+          {/* ── Budget (plain-language) ─────────────────────────────────── */}
           {headroom && (
             <div className="border-t border-theme-divider px-5 py-3">
               <p className="text-xs font-medium text-theme-text-secondary">Budget</p>
@@ -189,7 +197,7 @@ export default function StrategyPanel({
             </div>
           )}
 
-          {/* ── P9: Monthly agent spend ────────────────────────────────── */}
+          {/* ── Monthly agent spend ─────────────────────────────────────── */}
           {data.monthlySpend && data.monthlySpend.runsThisMonth > 0 && (
             <div className="border-t border-theme-divider px-5 py-3">
               <p className="text-xs font-medium text-theme-text-secondary">Monthly agent spend</p>
@@ -205,7 +213,7 @@ export default function StrategyPanel({
             </div>
           )}
 
-          {/* ── Ranked alternatives (collapsible) ──────────────────────── */}
+          {/* ── Ranked alternatives (each actionable) ────────────────────── */}
           {data.ranked.length > 1 && (
             <div className="border-t border-theme-divider px-5 py-3">
               <button
@@ -224,8 +232,21 @@ export default function StrategyPanel({
                         {c.angleTitle && (
                           <span className="text-theme-text-secondary"> — {c.angleTitle}</span>
                         )}
+                        {c.reasons.length > 0 && (
+                          <span className="block text-theme-text-secondary">· {c.reasons[0]}</span>
+                        )}
                       </div>
-                      <span className="badge bg-neutral-100 text-neutral-500 shrink-0">{formatScore(c.score)}</span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="badge bg-neutral-100 text-neutral-500">{formatScore(c.score)}</span>
+                        <button
+                          type="button"
+                          onClick={() => runFrom(c.sourceId)}
+                          disabled={startingId === c.sourceId || headroom?.atLimit}
+                          className="btn px-2 py-1 text-xs disabled:opacity-50"
+                        >
+                          {startingId === c.sourceId ? "Starting…" : "Create"}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -233,10 +254,10 @@ export default function StrategyPanel({
             </div>
           )}
 
-          {/* ── Exclusions (why-not) ──────────────────────────────────── */}
+          {/* ── Why-not (exclusions) ────────────────────────────────────── */}
           {data.exclusions.length > 0 && (
             <div className="border-t border-theme-divider px-5 py-3">
-              <p className="text-xs font-medium text-theme-text-secondary">Why not these sources?</p>
+              <p className="text-xs font-medium text-theme-text-secondary">Sources not recommended?</p>
               <ul className="mt-1 space-y-1">
                 {data.exclusions.map((e) => (
                   <li key={e.sourceId} className="text-xs text-theme-text-secondary">
@@ -249,7 +270,7 @@ export default function StrategyPanel({
             </div>
           )}
 
-          {/* ── Publish next action ────────────────────────────────────── */}
+          {/* ── Act on the recommendation ────────────────────────────────── */}
           {rec && !headroom?.atLimit && (
             <div className="border-t border-theme-divider px-5 py-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -257,7 +278,7 @@ export default function StrategyPanel({
                   value={mode}
                   onChange={(e) => setMode(e.target.value as AgentMode)}
                   className="rounded-lg border border-theme-divider bg-theme-bg-paper px-3 py-1.5 text-xs"
-                  aria-label="Autonomy mode for publish next"
+                  aria-label="Autonomy mode for the recommended run"
                 >
                   {AGENT_MODES.map((m) => (
                     <option key={m} value={m}>{AGENT_MODE_LABEL[m]}</option>
@@ -265,17 +286,18 @@ export default function StrategyPanel({
                 </select>
                 <button
                   type="button"
-                  onClick={publishNext}
-                  disabled={publishing || headroom?.atLimit}
+                  onClick={() => runFrom(rec.sourceId)}
+                  disabled={startingId === rec.sourceId || headroom?.atLimit}
                   className="btn btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {publishing ? "Starting…" : "Publish next"}
+                  {startingId === rec.sourceId ? "Starting…" : "Create from this recommendation"}
                 </button>
               </div>
             </div>
           )}
         </>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }

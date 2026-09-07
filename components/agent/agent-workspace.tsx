@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardHeader } from "@/components/card";
+import { useState } from "react";
 import EmptyState from "@/components/empty-state";
-import SegmentedControl from "@/components/segmented-control";
-import { AGENT_MODES, AGENT_MODE_LABEL, type AgentMode, type AgentRunSummary } from "@/types/agent";
+import type { AgentMode } from "@/types/agent";
+import AgentContextStrip, { type AgentContextData } from "./agent-context-strip";
+import OutcomeComposer from "./outcome-composer";
+import OpportunityFeed from "./opportunity-feed";
 import RunList from "./run-list";
 import RunDetail from "./run-detail";
-import StrategyPanel from "./strategy-panel";
 
 export interface AgentSource {
   id: string;
@@ -30,19 +30,28 @@ export type RunStatusView = (typeof RUN_STATUSES)[number];
 
 // The workspace owns the run lifecycle against the durable /api/agent/* routes.
 // No in-memory state that matters: every transition is recoverable from
-// v4_agent_runs + v4_agent_steps.
+// v4_agent_runs + v4_agent_steps. The session's `goals` map is display-only —
+// the durable run row keeps its source-linked identity.
 
-export default function AgentWorkspace({ initialSources }: { initialSources: AgentSource[] }) {
+export default function AgentWorkspace({
+  initialSources,
+  defaultSourceId,
+  context
+}: {
+  initialSources: AgentSource[];
+  defaultSourceId: string | null;
+  context: AgentContextData;
+}) {
   const [sources] = useState<AgentSource[]>(initialSources);
   const [runId, setRunId] = useState<string | null>(null);
-  const [mode, setMode] = useState<AgentMode>("assist");
-  const [sourceId, setSourceId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [goals, setGoals] = useState<Record<string, string>>({});
+  const [focusKey, setFocusKey] = useState(0);
 
-  async function startRun(srcId?: string, runMode?: AgentMode) {
-    const effectiveSourceId = srcId ?? sourceId;
-    const effectiveMode = runMode ?? mode;
+  async function startRun(srcId?: string, runMode?: AgentMode, goal = "") {
+    const effectiveSourceId = srcId ?? "";
+    const effectiveMode = runMode ?? "assist";
     if (!effectiveSourceId || busy) return;
     setBusy(true);
     setError(null);
@@ -60,6 +69,9 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
       return;
     }
 
+    if (goal) {
+      setGoals((prev) => ({ ...prev, [body.run!.id]: goal }));
+    }
     setRunId(body.run.id);
     setBusy(false);
   }
@@ -87,70 +99,28 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      {/* Left: strategy recommendation + new run + history */}
+      {/* Left: what the agent knows + outcome-first composer + opportunities + history */}
       <div className="space-y-6">
-        <StrategyPanel onStartRun={startRun} />
-
-        <Card>
-          <CardHeader title="New run" description="Plan angles from a finished source, approve, generate." />
-          <div className="space-y-4 px-5 py-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-theme-text-secondary">Source</label>
-              <select
-                value={sourceId}
-                onChange={(e) => setSourceId(e.target.value)}
-                className="w-full rounded-lg border border-theme-divider bg-theme-bg-paper px-3 py-2 text-sm"
-              >
-                <option value="">Choose a source…</option>
-                {sources.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title || s.id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-              {sources.length === 0 && (
-                <p className="mt-1 text-xs text-theme-text-secondary">No finished sources yet — repurpose something first.</p>
-              )}
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-medium text-theme-text-secondary">Mode</label>
-              <SegmentedControl<AgentMode>
-                options={AGENT_MODES.map((m) => ({ id: m, label: AGENT_MODE_LABEL[m] }))}
-                value={mode}
-                onChange={setMode}
-                ariaLabel="Autonomy mode"
-              />
-              <p className="mt-2 text-xs text-theme-text-secondary">
-                Assist approves every angle. Execute adds one bounded auto-revision. Automate is reserved for
-                distribution (stubbed today).
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => startRun()}
-              disabled={busy || !sourceId}
-              className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy ? "Starting…" : "Start agent run"}
-            </button>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </div>
-        </Card>
-
-        <RunList
-          runId={runId}
-          onSelect={setRunId}
-          onKick={kickRun}
+        <OutcomeComposer
+          sources={sources}
+          defaultSourceId={defaultSourceId}
+          busy={busy}
+          error={error}
+          onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}
+          onExploreOpportunities={() => setFocusKey((k) => k + 1)}
         />
+
+        <AgentContextStrip context={context} />
+
+        <OpportunityFeed onStartRun={(src, m) => startRun(src, m)} focusKey={focusKey} />
+
+        <RunList runId={runId} goals={goals} onSelect={setRunId} onKick={kickRun} />
       </div>
 
-      {/* Right: the selected run's plan / timeline / outputs */}
+      {/* Right: the selected run's plan / progress / drafts */}
       <div className="lg:col-span-2">
         {runId ? (
-          <RunDetail runId={runId} onChange={() => {}} />
+          <RunDetail runId={runId} goal={goals[runId]} onChange={() => {}} />
         ) : (
           <EmptyState
             icon={
@@ -162,7 +132,7 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
               </svg>
             }
             title="No run loaded"
-            description="Start an agent run, or pick one from history to inspect its plan, timeline and drafts."
+            description="Start an agent run, or pick one from history — its plan, progress and drafts appear here."
           />
         )}
       </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getRecentSignals } from "@/lib/agent/memory";
+import { aggregateMonthlySpend, type MonthlyAgentSpend } from "@/lib/agent/spend";
 import { log } from "@/lib/logger";
 
 // GET /api/agent/runs/[id] — full detail for the agent workspace: the run row,
@@ -44,7 +45,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const steps = stepsResult.data ?? [];
   const outputs = outputsResult.data ?? [];
 
+  // Monthly agent spend for the consumer budget line (service-role query, same
+  // aggregation semantics as the strategy surface — honest totals, never new data).
+  let monthlySpend: MonthlyAgentSpend | null = null;
+  try {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const { data: monthRuns } = await service
+      .from("v4_agent_runs")
+      .select("input_tokens, output_tokens, cost_units, status")
+      .eq("user_id", user.id)
+      .gte("created_at", monthStart);
+    monthlySpend = aggregateMonthlySpend(monthRuns ?? []);
+  } catch {
+    monthlySpend = null;
+  }
+
   log.info("agent.run_detail", { run_id: id, user_id: user.id });
 
-  return NextResponse.json({ run, ideas, steps, outputs, signals });
+  return NextResponse.json({ run, ideas, steps, outputs, signals, monthlySpend });
 }
