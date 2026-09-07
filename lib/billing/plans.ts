@@ -95,10 +95,10 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "creator",
     name: "Creator",
     tagline: "For solo creators publishing weekly.",
-    displayPrice: "$12/mo",
-    monthPriceUsd: 12,
-    isPublic: false,
-    available: false,
+    displayPrice: "$19/mo",
+    monthPriceUsd: 19,
+    isPublic: true,
+    available: true,
     limits: {
       maxJobsPerMonth: 20,
       maxInputMinutes: 60,
@@ -110,16 +110,22 @@ export const PLANS: Record<PlanId, Plan> = {
         maxRuntimeSeconds: 2700
       }
     },
-    includes: ["Everything in Beta", "20 jobs / month", "Up to 1 hour per recording"]
+    includes: [
+      "Everything in Beta",
+      "20 jobs / month",
+      "Up to 1 hour per recording",
+      "Priority rendering",
+      "Email support"
+    ]
   },
   pro: {
     id: "pro",
     name: "Pro",
     tagline: "For teams and multi-format channels.",
-    displayPrice: "$29/mo",
-    monthPriceUsd: 29,
-    isPublic: false,
-    available: false,
+    displayPrice: "$49/mo",
+    monthPriceUsd: 49,
+    isPublic: true,
+    available: true,
     limits: {
       maxJobsPerMonth: 75,
       maxInputMinutes: 180,
@@ -131,16 +137,23 @@ export const PLANS: Record<PlanId, Plan> = {
         maxRuntimeSeconds: 3600
       }
     },
-    includes: ["Everything in Creator", "75 jobs / month", "Up to 3 hours per recording"]
+    includes: [
+      "Everything in Creator",
+      "75 jobs / month",
+      "Up to 3 hours per recording",
+      "Team sharing",
+      "Analytics",
+      "Priority support"
+    ]
   },
   studio: {
     id: "studio",
     name: "Studio",
     tagline: "For agencies and production teams.",
-    displayPrice: "$79/mo",
-    monthPriceUsd: 79,
-    isPublic: false,
-    available: false,
+    displayPrice: "$99/mo",
+    monthPriceUsd: 99,
+    isPublic: true,
+    available: true,
     limits: {
       maxJobsPerMonth: null,
       maxInputMinutes: 600,
@@ -152,7 +165,14 @@ export const PLANS: Record<PlanId, Plan> = {
         maxRuntimeSeconds: 5400
       }
     },
-    includes: ["Everything in Pro", "Unlimited jobs", "Up to 10 hours per recording"]
+    includes: [
+      "Everything in Pro",
+      "Unlimited jobs",
+      "Up to 10 hours per recording",
+      "3 team seats",
+      "API/export access",
+      "Dedicated support"
+    ]
   }
 };
 

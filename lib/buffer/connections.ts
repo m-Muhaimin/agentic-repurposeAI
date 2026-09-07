@@ -69,11 +69,10 @@ export async function getFreshAccessToken(userId: string): Promise<{ token: stri
   }
 
   const tokens = await refreshAccessToken(connection.refresh_token);
-  // Buffer rotates the refresh token on refresh; if it doesn't return one,
-  // keep reusing the stored one so the next refresh still works.
-  if (!tokens.refresh_token) tokens.refresh_token = connection.refresh_token;
+  // Buffer rotates the refresh token on refresh (single-use); the response
+  // always carries a fresh one. Guard the shape to never store nulls.
   await saveConnection(userId, tokens, {
-    id: Number(connection.buffer_account_id),
+    id: connection.buffer_account_id,
     username: connection.buffer_username
   });
   const fresh = await getConnection(userId);
@@ -86,7 +85,7 @@ export async function getFreshAccessToken(userId: string): Promise<{ token: stri
 export async function saveConnection(
   userId: string,
   tokens: BufferTokens,
-  user: { id: number; username: string }
+  user: { id: string; username: string }
 ): Promise<void> {
   const now = new Date();
   const row: Partial<BufferConnectionRow> = {

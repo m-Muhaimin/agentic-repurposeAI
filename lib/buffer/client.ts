@@ -1,18 +1,19 @@
-// Buffer REST API client for the publish path. Token is passed by callers who
+// Buffer GraphQL API client for the publish path. Token is passed by callers who
 // already decrypted it — tokens never live here, in logs, or on the wire beyond
-// what Buffer's API surface requires (access_token query param for GETs, form
-// body for creates).
+// the Authorization header Buffer's API requires. Buffer ended its legacy REST
+// API (api.bufferapp.com/1) in favour of a single GraphQL endpoint
+// (api.buffer.com); the OAuth tokens issued by auth.buffer.com only work there.
 //
-// Platform → Buffer "service" mapping. Buffer's profile objects carry a `service`
+// Platform → Buffer "service" mapping. Buffer's channel objects carry a `service`
 // like "linkedin" | "twitter" | "youtube" | ... Our DistributionPlatform names
 // map onto it; `newsletter` has NO Buffer equivalent and is rejected honestly.
 // `x` maps to Buffer's legacy "twitter" service id.
 
 import type { DistributionPlatform } from "@/types/agent";
 
-export const BUFFER_BASE = "https://api.bufferapp.com/1";
+export const BUFFER_API_URL = "https://api.buffer.com";
 
-// Buffer service id for profile matching. newsletter has no Buffer channel.
+// Buffer service id for profile/channel matching. newsletter has no Buffer channel.
 const PLATFORM_TO_SERVICE: Partial<Record<DistributionPlatform, string>> = {
   linkedin: "linkedin",
   x: "twitter",
@@ -25,7 +26,8 @@ export interface BufferProfile {
   id: string;
   service: string;
   service_username?: string;
-  created?: boolean;
+  avatar?: string;
+  isQueuePaused?: boolean;
 }
 
 export interface BufferUpdateResult {
@@ -51,56 +53,133 @@ export function platformToBufferService(platform: DistributionPlatform): string 
   return PLATFORM_TO_SERVICE[platform] ?? null;
 }
 
-export async function fetchProfiles(accessToken: string): Promise<BufferProfile[]> {
-  const res = await fetch(`${BUFFER_BASE}/profiles.json?access_token=${encodeURIComponent(accessToken)}`);
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new BufferClientError("Buffer rate limit hit while listing profiles.", "rate_limited", retryAfterMs(res));
-    }
-    throw new BufferClientError(`Buffer profiles fetch failed (${res.status}).`, "buffer_error");
-  }
-  const json = (await res.json()) as unknown;
-  if (!Array.isArray(json)) {
-    throw new BufferClientError("Buffer profiles response was not an array.", "buffer_error");
-  }
-  return json as BufferProfile[];
+function authHeaders(accessToken: string): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`
+  };
 }
 
+// POST a GraphQL operation to api.buffer.com and return `data`. Surfaces HTTP
+// errors (rate limits, 401s) and Buffer's typed `errors` array as BufferClientError
+// so the caller can fail the job honestly. Calling code composes the query
+// strings; all values are embedded from trusted server-side inputs.
+async function bufferGraphql<T>(accessToken: string, query: string): Promise<T> {
+  const res = await fetch(BUFFER_API_URL, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ query })
+  });
+
+  if (res.status === 429) {
+    throw new BufferClientError("Buffer rate limit hit.", "rate_limited", retryAfterMs(res));
+  }
+  if (!res.ok) {
+    const detail = await parseErrorDetail(res);
+    throw new BufferClientError(`Buffer API request failed (${res.status}): ${detail}`, "buffer_error");
+  }
+
+  const json = (await res.json()) as { data?: T; errors?: { message?: string }[] };
+  if (Array.isArray(json.errors) && json.errors.length > 0) {
+    const message = json.errors.map((e) => e.message).filter(Boolean).join(", ") || "unknown error";
+    throw new BufferClientError(`Buffer API error: ${message}`, "buffer_error");
+  }
+  return json.data as T;
+}
+
+// List the user's connected channels across every organization they belong to.
+// GraphQL needs an organizationId to query channels, so it's a two-step: read
+// the account's organizations, then fetch channels for each.
+export async function fetchProfiles(accessToken: string): Promise<BufferProfile[]> {
+  const accountData = await bufferGraphql<{ account: { organizations: { id: string }[] } }>(
+    accessToken,
+    `query { account { organizations { id } } }`
+  );
+  const orgs = accountData?.account?.organizations ?? [];
+
+  const profiles: BufferProfile[] = [];
+  for (const org of orgs) {
+    const channelsData = await bufferGraphql<{
+      channels: { id: string; service: string; name?: string; avatar?: string | null; isQueuePaused?: boolean }[];
+    }>(
+      accessToken,
+      `query {
+        channels(input: { organizationId: ${JSON.stringify(org.id)} }) {
+          id
+          service
+          name
+          avatar
+          isQueuePaused
+        }
+      }`
+    );
+    for (const ch of channelsData?.channels ?? []) {
+      profiles.push({
+        id: ch.id,
+        service: ch.service,
+        service_username: ch.name,
+        avatar: ch.avatar ?? undefined,
+        isQueuePaused: ch.isQueuePaused
+      });
+    }
+  }
+  return profiles;
+}
+
+// Create a post for ONE channel via the createPost mutation. The GraphQL API
+// posts to a single channel id per call (no more profile_ids[]), so callers that
+// target several channels (INSIDE this function, on behalf of the caller) fan
+// out one mutation per channel. An immediate send → `mode: shareNow`; a
+// future-scheduled send → `mode: customScheduled` with dueAt.
 export async function createUpdate(opts: {
   accessToken: string;
   text: string;
   profileIds: string[];
   scheduledAt?: string;
 }): Promise<BufferUpdateResult> {
-  const body = new URLSearchParams({
-    access_token: opts.accessToken,
-    text: opts.text,
-    shorten: "false"
-  });
-  for (const id of opts.profileIds) body.append("profile_ids[]", id);
-  if (opts.scheduledAt) body.set("scheduled_at", opts.scheduledAt);
+  if (opts.profileIds.length === 0) {
+    throw new BufferClientError("Buffer createUpdate requires at least one channel id.", "buffer_error");
+  }
 
-  const res = await fetch(`${BUFFER_BASE}/updates/create.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString()
-  });
+  const updateIds: string[] = [];
+  const errors: string[] = [];
+  for (const channelId of opts.profileIds) {
+    const scheduledSubquery = opts.scheduledAt
+      ? `mode: customScheduled, dueAt: ${JSON.stringify(opts.scheduledAt)}`
+      : `mode: shareNow`;
+    const query = `mutation {
+      createPost(input: {
+        text: ${JSON.stringify(opts.text)}
+        channelId: ${JSON.stringify(channelId)}
+        schedulingType: automatic
+        ${scheduledSubquery}
+      }) {
+        ... on PostActionSuccess {
+          post { id }
+        }
+        ... on MutationError {
+          message
+        }
+      }
+    }`;
+    const data = await bufferGraphql<{
+      createPost?: { post?: { id?: string } | null; message?: string };
+    }>(opts.accessToken, query);
 
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new BufferClientError("Buffer rate limit hit while creating the update.", "rate_limited", retryAfterMs(res));
+    const created = data?.createPost;
+    if (created?.post?.id) {
+      updateIds.push(created.post.id);
+    } else if (created?.message) {
+      errors.push(created.message);
+    } else {
+      errors.push("unknown response");
     }
-    const detail = await parseErrorDetail(res);
-    throw new BufferClientError(`Buffer update create failed (${res.status}): ${detail}`, "buffer_error");
   }
 
-  const json = (await res.json()) as unknown;
-  const result = json as BufferUpdateResult;
-  if (result.success !== true || !result.update_id) {
-    const detail = Array.isArray(result.errors) ? result.errors.join(", ") : "unknown response";
-    throw new BufferClientError(`Buffer rejected the update: ${detail}`, "buffer_error");
+  if (errors.length > 0) {
+    throw new BufferClientError(`Buffer rejected the update: ${errors.join(", ")}`, "buffer_error");
   }
-  return result;
+  return { success: true, update_id: updateIds[0] };
 }
 
 function retryAfterMs(res: Response): number {
@@ -112,9 +191,9 @@ function retryAfterMs(res: Response): number {
   return Math.min(secs, 3600) * 1000;
 }
 
-// Pull Buffer's own rejection detail (e.g. an `errors` array or a `message`)
-// so the job's error_message is actionable, never just a status code. Falls
-// back to a plain "unknown" — never throws from inside a catch path.
+// Pull Buffer's own rejection detail (e.g. a `message`) so the job's
+// error_message is actionable, never just a status code. Falls back to a plain
+// "unknown" — never throws from inside a catch path.
 async function parseErrorDetail(res: Response): Promise<string> {
   try {
     const text = await res.text();

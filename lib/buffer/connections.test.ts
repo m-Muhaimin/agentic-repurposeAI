@@ -48,7 +48,7 @@ vi.mock("./crypto", () => ({
 
 import { getFreshAccessToken } from "./connections";
 
-const TOKEN_URL = "https://api.bufferapp.com/1/oauth2/token.json";
+const TOKEN_URL = "https://auth.buffer.com/token";
 
 function stubTokenResponse(body: { access_token?: string; refresh_token?: string; expires_in?: number; error?: string }) {
   const failed = Boolean(body.error);
@@ -157,7 +157,7 @@ describe("getFreshAccessToken — token freshness", () => {
     expect(saved.access_token_expires_at).toBeTruthy();
   });
 
-  it("keeps the stored refresh token when Buffer omits a new one on rotation", async () => {
+  it("never replays a single-use refresh token when Buffer omits a new one", async () => {
     let reads = 0;
     behavior["buffer_connections"] = {
       get data() {
@@ -169,14 +169,16 @@ describe("getFreshAccessToken — token freshness", () => {
             refresh_token: "ENC:refr-1"
           }).data;
         }
-        return connectionRow({ access_token: "ENC:tok-2", refresh_token: "ENC:refr-1" }).data;
+        return connectionRow({ access_token: "ENC:tok-2", refresh_token: null }).data;
       }
     };
     stubTokenResponse({ access_token: "tok-2", expires_in: 86_400 });
 
     await getFreshAccessToken("u1");
     const saved = upserts[0].payload as Record<string, unknown>;
-    expect(saved.refresh_token).toBe("ENC:refr-1");
+    // A missing refresh_token in the rotation response is stored as null —
+    // the old one has already been consumed and MUST NOT be replayed.
+    expect(saved.refresh_token).toBeNull();
   });
 
   it("surfaces the stale token with refreshed:false when there is no way to refresh", async () => {

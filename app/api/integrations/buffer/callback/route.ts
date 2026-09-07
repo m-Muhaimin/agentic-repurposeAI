@@ -40,13 +40,24 @@ export async function GET(request: NextRequest) {
     return redirect(`/login?next=/connections&message=Connect-Buffer-after-login`);
   }
   const expected = request.cookies.get("buffer_oauth_state")?.value;
-  if (!code || !state || !expected || !safeEqual(state, expected)) {
+  let verifier: string | null = null;
+  let expectedState: string | null = null;
+  if (expected) {
+    try {
+      const parsed = JSON.parse(expected) as { state?: string; verifier?: string };
+      expectedState = parsed.state ?? null;
+      verifier = parsed.verifier ?? null;
+    } catch {
+      // malformed cookie → treated as a mismatch below, no leak.
+    }
+  }
+  if (!code || !state || !expectedState || !verifier || !safeEqual(state, expectedState)) {
     log.warn("buffer.callback_state_mismatch", { user_id: user.id });
     return redirect("/connections?success=buffer&error=state");
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code, bufferOAuthRedirectUri(request));
+    const tokens = await exchangeCodeForTokens(code, bufferOAuthRedirectUri(request), verifier);
     const bufferUser = await fetchBufferUser(tokens.access_token);
     await saveConnection(user.id, tokens, bufferUser);
     log.info("buffer.connected", { user_id: user.id, account_id: bufferUser.id });

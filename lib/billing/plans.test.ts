@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 import { BETA_PLAN, PLANS, getPlan, getPublicPlans, isOutputFormat } from "@/lib/billing/plans";
 
 describe("plans config", () => {
-  it("beta is the only public and available tier", () => {
+  it("beta is the free public tier", () => {
     const publicPlans = getPublicPlans();
-    expect(publicPlans.map((p) => p.id)).toEqual(["beta"]);
+    expect(publicPlans.map((p) => p.id)).toEqual(["beta", "creator", "pro", "studio"]);
     expect(publicPlans.every((p) => p.available)).toBe(true);
-    expect(Object.values(PLANS).filter((p) => p.available).map((p) => p.id)).toEqual(["beta"]);
+    expect(Object.values(PLANS).filter((p) => p.available).map((p) => p.id)).toEqual(["beta", "creator", "pro", "studio"]);
   });
 
   it("beta caps jobs, input length, outputs and regenerations", () => {
@@ -18,9 +18,10 @@ describe("plans config", () => {
     expect(BETA_PLAN.limits.maxRegenerationsPerJob).toBe(2);
   });
 
-  it("enforcement tiers exist for launch but stay off the public surface", () => {
+  it("paid tiers are public and priced for launch", () => {
     for (const id of ["creator", "pro", "studio"] as const) {
-      expect(PLANS[id].isPublic).toBe(false);
+      expect(PLANS[id].isPublic).toBe(true);
+      expect(PLANS[id].available).toBe(true);
       expect(PLANS[id].monthPriceUsd).toBeGreaterThan(0);
     }
   });

@@ -3,7 +3,10 @@ import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 import WaitlistLink from "@/components/waitlist-link";
 import { SectionHeading } from "@/components/section-heading";
-import { getPublicPlans } from "@/lib/billing/plans";
+import { getPublicPlans, PLANS, type Plan } from "@/lib/billing/plans";
+import { PAID_PLAN_IDS, type PaidPlanId } from "@/lib/billing/paddle";
+import { purchasedPlanIds } from "@/lib/billing/paddle";
+import PricingCheckout from "@/components/pricing-checkout";
 
 const STEPS = [
   {
@@ -158,6 +161,18 @@ const INPUTS = [
 
 const FAQS = [
   {
+    q: "What's the editing experience like?",
+    a: "Each draft opens in a clean editor inside the app. You can rewrite inline, swap tone, expand, or trim before exporting."
+  },
+  {
+    q: "Do I need a podcast to use this?",
+    a: "No. Upload a video file, paste a YouTube link, or bring a transcript — podcast is just one input, not a requirement."
+  },
+  {
+    q: "How is this different from ChatGPT?",
+    a: "We're built around repurposing, not chat. The app understands your source media, enforces platform structure, and keeps outputs tied back to the original recording."
+  },
+  {
     q: "Is it really free?",
     a: "Yes. While RepurposeAI is in beta, every account gets the Beta plan: 5 repurpose jobs a month, every output format, and all the drafting tools — at no cost. No credit card required."
   },
@@ -211,6 +226,10 @@ export default function Home() {
   // from config so the site never leaks an unpublished paid tier.
   const plans = getPublicPlans();
   const betaPlan = plans.find((p) => p.id === "beta");
+  const availablePaidPlans = Object.values(PLANS).filter(
+    (p): p is Plan & { id: PaidPlanId } => p.id !== "beta" && p.isPublic && p.available
+  );
+  const purchasable = purchasedPlanIds();
 
   return (
     <>
@@ -219,7 +238,7 @@ export default function Home() {
       {/* Hero */}
       <section className="common-section relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-          <div className="absolute -top-24 right-[-10%] size-[420px] rounded-full bg-primary-100/60 blur-3xl" />
+          <div className="hero-glow absolute -top-24 right-[-10%] size-[420px] rounded-full bg-primary-100/60 blur-3xl" />
           <div className="absolute bottom-[-20%] left-[-10%] size-[360px] rounded-full bg-secondary-100/60 blur-3xl" />
         </div>
 
@@ -260,10 +279,10 @@ export default function Home() {
             {/* Product preview — real drafts, real formats */}
             <div className="relative mx-auto w-full max-w-lg">
               <div
-                className="pointer-events-none absolute -inset-10 -z-10 rounded-[40px] bg-gradient-to-tr from-primary-500/15 via-transparent to-secondary-500/15 blur-2xl"
+                className="pointer-events-none absolute -inset-10 -z-10 rounded-[40px] bg-gradient-to-tr from-primary-500/15 via-transparent to-secondary-500/15 blur-2xl animate-pulse"
                 aria-hidden="true"
               />
-              <div className="overflow-hidden rounded-xl border border-theme-divider bg-theme-bg-paper shadow-2xl shadow-neutral-900/10">
+              <div className="hero-preview overflow-hidden rounded-xl border border-theme-divider bg-theme-bg-paper shadow-2xl shadow-neutral-900/10">
                 <div className="flex items-center gap-1.5 border-b border-theme-divider bg-neutral-50 px-4 py-3">
                   <span className="size-2.5 rounded-full bg-primary-300" />
                   <span className="size-2.5 rounded-full bg-secondary-300" />
@@ -326,6 +345,37 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Social proof */}
+      <section className="common-section border-b border-theme-divider" aria-label="Testimonials">
+        <div className="container">
+          <div className="grid gap-6 md:grid-cols-2">
+            {TESTIMONIALS.map((t) => (
+              <blockquote
+                key={t.name}
+                className="rounded-lg border border-theme-divider bg-theme-bg-paper p-5 transition-colors hover:border-primary-200 hover:shadow-sm"
+              >
+                <p className="text-sm leading-normal text-theme-text-secondary">“{t.quote}”</p>
+                <footer className="mt-4 flex items-center gap-3">
+                  <span
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-600"
+                    aria-hidden="true"
+                  >
+                    {t.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </span>
+                  <span className="text-xs">
+                    <span className="font-medium text-theme-text-primary">{t.name}</span>
+                    <span className="text-theme-text-secondary"> · {t.role}</span>
+                  </span>
+                </footer>
+              </blockquote>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Who it's for */}
       <section className="common-section bg-neutral-50">
         <div className="container">
@@ -369,7 +419,7 @@ export default function Home() {
             {STEPS.map((step) => (
               <div
                 key={step.num}
-                className="relative rounded-lg border border-theme-divider bg-theme-bg-paper p-6"
+                className="relative rounded-lg border border-theme-divider bg-theme-bg-paper p-6 transition-all hover:-translate-y-1 hover:border-primary-200 hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
                   <span className="relative z-10 flex size-11 items-center justify-center rounded-full bg-primary-100 text-primary-500">
@@ -402,26 +452,15 @@ export default function Home() {
             {OUTPUTS.map((o) => (
               <div
                 key={o.format}
-                className="flex flex-col rounded-lg border border-theme-divider bg-theme-bg-paper p-6"
+                className="flex flex-col rounded-xl border border-theme-divider bg-theme-bg-paper p-6 transition-all hover:-translate-y-1 hover:border-primary-200 hover:shadow-lg"
               >
-                <span className={`badge ${o.accent}`}>{o.format}</span>
-                <p className="mt-4 text-sm leading-normal text-theme-text-secondary">{o.body}</p>
-                <div className="mt-auto flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-2.5 text-xs font-medium text-theme-text-secondary">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="size-4"
-                    aria-hidden="true"
-                  >
-                    <path d="M3.5 13 6 10.5l3 3 6-6 3 3" />
-                    <path d="M3 6h13M3 18h18M20 18h1" />
-                  </svg>
-                  {o.meta}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className={`badge ${o.accent}`}>{o.format}</span>
+                  <span className="badge border border-theme-divider bg-white/60 text-neutral-500">
+                    {o.meta}
+                  </span>
                 </div>
+                <p className="mt-4 text-sm leading-normal text-theme-text-secondary">{o.body}</p>
               </div>
             ))}
           </div>
@@ -468,76 +507,126 @@ export default function Home() {
             body="We're validating RepurposeAI in the open — you get real, working limits while we do, all on us."
           />
 
-          {betaPlan && (
-            <div className="mx-auto mt-12 max-w-md">
-              <div className="flex flex-col rounded-xl border border-transparent bg-neutral-900 p-6 text-white shadow-2xl shadow-neutral-900/20 sm:p-8">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-display text-lg font-semibold">{betaPlan.name} plan</p>
-                    <p className="mt-1 text-sm text-neutral-400">{betaPlan.tagline}</p>
+          <div className="mt-12 grid gap-6 md:grid-cols-4">
+            {betaPlan && (
+              <div className="md:col-span-2">
+                <div className="flex flex-col rounded-xl border-2 border-neutral-900 bg-neutral-900 p-6 text-white shadow-2xl shadow-neutral-900/20 sm:p-8">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-lg font-semibold">{betaPlan.name} plan</p>
+                      <p className="mt-1 text-sm text-neutral-400">{betaPlan.tagline}</p>
+                    </div>
+                    <span className="badge bg-primary-500 text-white">Limited beta</span>
                   </div>
-                  <span className="badge bg-primary-500 text-white">Current</span>
+
+                  <p className="mt-6 flex items-baseline gap-2">
+                    <span className="font-display text-4xl font-bold">{betaPlan.displayPrice}</span>
+                    <span className="text-sm text-neutral-400">during beta</span>
+                  </p>
+
+                  <div className="mt-6 grid grid-cols-3 gap-3 rounded-lg bg-neutral-800/60 p-4 text-center">
+                    <div>
+                      <p className="font-display text-2xl font-bold tabular-nums">
+                        {betaPlan.limits.maxJobsPerMonth}
+                      </p>
+                      <p className="mt-0.5 text-xs text-neutral-400">jobs / month</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-2xl font-bold tabular-nums">
+                        {betaPlan.limits.maxInputMinutes}
+                      </p>
+                      <p className="mt-0.5 text-xs text-neutral-400">min / recording</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-2xl font-bold tabular-nums">
+                        {betaPlan.limits.maxOutputsPerJob}
+                      </p>
+                      <p className="mt-0.5 text-xs text-neutral-400">outputs / job</p>
+                    </div>
+                  </div>
+
+                  <ul className="mt-6 flex flex-col gap-2.5 text-sm">
+                    {betaPlan.includes.map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-neutral-300">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="size-4 text-primary-500"
+                          aria-hidden="true"
+                        >
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/upload"
+                    className="btn mt-8 w-full bg-white text-neutral-900 hover:bg-neutral-100"
+                  >
+                    Start free — no credit card
+                  </Link>
+                  <p className="mt-4 text-center text-xs text-neutral-400">
+                    Early users keep beta access and shape the roadmap.
+                  </p>
                 </div>
-
-                <p className="mt-6 flex items-baseline gap-2">
-                  <span className="font-display text-4xl font-bold">{betaPlan.displayPrice}</span>
-                  <span className="text-sm text-neutral-400">during beta</span>
-                </p>
-
-                <div className="mt-6 grid grid-cols-3 gap-3 rounded-lg bg-neutral-800/60 p-4 text-center">
-                  <div>
-                    <p className="font-display text-2xl font-bold tabular-nums">
-                      {betaPlan.limits.maxJobsPerMonth}
-                    </p>
-                    <p className="mt-0.5 text-xs text-neutral-400">jobs / month</p>
-                  </div>
-                  <div>
-                    <p className="font-display text-2xl font-bold tabular-nums">
-                      {betaPlan.limits.maxInputMinutes}
-                    </p>
-                    <p className="mt-0.5 text-xs text-neutral-400">min / recording</p>
-                  </div>
-                  <div>
-                    <p className="font-display text-2xl font-bold tabular-nums">
-                      {betaPlan.limits.maxOutputsPerJob}
-                    </p>
-                    <p className="mt-0.5 text-xs text-neutral-400">outputs / job</p>
-                  </div>
-                </div>
-
-                <ul className="mt-6 flex flex-col gap-2.5 text-sm">
-                  {betaPlan.includes.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-neutral-300">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="size-4 text-primary-500"
-                        aria-hidden="true"
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href="/upload"
-                  className="btn mt-8 w-full bg-white text-neutral-900 hover:bg-neutral-100"
-                >
-                  Start free — no credit card
-                </Link>
-                <p className="mt-4 text-center text-xs text-neutral-400">
-                  More power (and paid plans) are coming —{" "}
-                  <WaitlistLink className="font-medium text-white underline underline-offset-2 hover:text-secondary-200" />
-                </p>
               </div>
+            )}
+
+            <div className="md:col-span-2 grid gap-6 md:grid-cols-3">
+              {availablePaidPlans.length > 0
+                ? availablePaidPlans.map((tier) => {
+                    const canPurchase = purchasable.includes(tier.id);
+                    return (
+                      <div
+                        key={tier.id}
+                        className={`flex flex-col rounded-xl border bg-theme-bg-paper p-5 text-center transition-colors hover:border-primary-200 hover:shadow-md ${
+                          canPurchase ? "border-theme-divider" : "border-dashed border-theme-divider"
+                        }`}
+                      >
+                        <p className="font-display text-base font-semibold text-theme-text-primary">{tier.name}</p>
+                        <p className="mt-1 text-xs text-theme-text-secondary">{tier.tagline}</p>
+                        <p className="mt-4 text-2xl font-bold tabular-nums">{tier.displayPrice}</p>
+                        <ul className="mt-4 flex flex-col gap-2 text-left text-xs text-theme-text-secondary">
+                          <li>{tier.limits.maxJobsPerMonth == null ? "Unlimited jobs" : `${tier.limits.maxJobsPerMonth} jobs / month`}</li>
+                          <li>Up to {tier.limits.maxInputMinutes} min / recording</li>
+                          <li>{tier.limits.maxOutputsPerJob} outputs / job</li>
+                        </ul>
+                        <div className="mt-auto pt-5">
+                          <p className="text-xs text-theme-text-secondary">
+                            Use the checkout below to upgrade.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                : [
+                    { name: "Creator", angle: "More jobs, same workflow" },
+                    { name: "Pro", angle: "Regeneration + longer inputs" },
+                    { name: "Studio", angle: "Teams, reuse, and higher limits" }
+                  ].map((tier) => (
+                    <div
+                      key={tier.name}
+                      className="flex flex-col rounded-xl border border-dashed border-theme-divider bg-theme-bg-paper p-5 text-center transition-colors hover:border-primary-200 hover:shadow-md"
+                    >
+                      <p className="font-display text-base font-semibold text-theme-text-primary">{tier.name}</p>
+                      <p className="mt-1 text-xs text-theme-text-secondary">{tier.angle}</p>
+                      <p className="mt-auto pt-4 text-xs text-theme-text-secondary">
+                        Coming after beta — <WaitlistLink className="font-medium text-primary-500 underline underline-offset-2" />
+                      </p>
+                    </div>
+                  ))}
             </div>
-          )}
+
+            <div className="mx-auto mt-10">
+              <PricingCheckout availablePlans={purchasable} />
+            </div>
+          </div>
 
           <div className="mx-auto mt-14 max-w-2xl">
             <h3 className="font-display text-center text-xl font-semibold">Common questions</h3>
