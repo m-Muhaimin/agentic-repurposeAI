@@ -1,0 +1,26 @@
+import Image from "next/image";
+import Link from "next/link";
+
+export function BrandMark({ className = "size-9" }: { className?: string }) {
+  return (
+    <Image
+      src="/icon.png"
+      alt="Repurpose AI"
+      width={512}
+      height={512}
+      className={`shrink-0 rounded-xl ${className}`}
+      priority
+    />
+  );
+}
+
+export default function Logo({ href = "/" }: { href?: string }) {
+  return (
+    <Link href={href} className="flex items-center gap-2.5">
+      <BrandMark />
+      <span className="font-display text-xl font-bold tracking-tight text-theme-text-primary">
+        Repurpose
+      </span>
+    </Link>
+  );
+}

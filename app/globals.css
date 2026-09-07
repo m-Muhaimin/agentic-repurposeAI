@@ -1,0 +1,261 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-theme-bg-default font-sans text-theme-text-secondary antialiased;
+  }
+
+  /* The kit pairs Archivo (display) with Figtree (body) */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display text-theme-text-primary;
+  }
+
+  h5,
+  h6 {
+    @apply font-semibold text-theme-text-primary;
+  }
+
+  b,
+  strong {
+    @apply font-semibold;
+  }
+
+  ::selection {
+    @apply bg-primary-100 text-primary-500;
+  }
+
+  /* Keyboard-only focus indicator. Form controls highlight via their border,
+     so keep the ring for everything else that can receive focus. */
+  :where(a[href], button, summary, [role="button"], [role="tab"], [tabindex]):focus-visible {
+    outline: 2px solid theme("colors.primary.500");
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* == Layout == */
+  .container {
+    @apply mx-auto w-full max-w-full px-4 sm:px-6;
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      @apply max-w-[1128px];
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .container {
+      @apply max-w-[1266px];
+    }
+  }
+
+  /* Application-mode container: wider than the marketing container so dense
+     workspace layouts (sidebar + wide bento grids) get room without touching
+     the marketing rhythm. */
+  .workspace {
+    @apply mx-auto w-full max-w-full px-4 sm:px-6 lg:px-8;
+  }
+
+  @media (min-width: 1280px) {
+    .workspace {
+      @apply max-w-[1440px];
+    }
+  }
+
+  .common-section {
+    @apply py-8 sm:py-10 md:py-12;
+  }
+
+  .caption {
+    @apply text-[12px] font-semibold leading-[1.333];
+  }
+
+  /* == Nav links == */
+  .nav-link {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
+  }
+
+  .nav-link.active {
+    @apply bg-primary-100 font-semibold text-primary-500;
+  }
+
+  .side-nav-link {
+    @apply flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
+  }
+
+  .side-nav-link.active {
+    @apply bg-primary-100 font-semibold text-primary-500;
+  }
+
+  /* == Badge == */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-semibold leading-[1.333];
+  }
+
+  /* == Buttons == */
+  .btn {
+    @apply inline-block cursor-pointer select-none rounded-lg border border-transparent bg-transparent px-[23px] py-2.5 text-center text-[14px] font-semibold leading-[1.429] tracking-[0.1px] transition-all duration-[250ms] ease-in-out active:scale-[0.98];
+    font-family: var(--font-archivo);
+  }
+
+  .btn.disabled,
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    @apply pointer-events-none cursor-default opacity-75;
+  }
+
+  .btn-lg {
+    @apply py-[19px];
+  }
+
+  .btn-md {
+    @apply py-[13px];
+  }
+
+  .btn-sm {
+    @apply py-2;
+  }
+
+  /* Filled styles get MUI-style elevation on hover (kit behavior) */
+  .btn:not([class*="btn-outline-"]):hover {
+    box-shadow:
+      rgba(0, 0, 0, 0.2) 0px 2px 4px -1px,
+      rgba(0, 0, 0, 0.14) 0px 4px 5px 0px,
+      rgba(0, 0, 0, 0.12) 0px 1px 10px 0px;
+  }
+
+  .btn-primary {
+    @apply bg-primary-500 text-white hover:bg-primary-800 focus:bg-primary-800 active:bg-primary-800;
+  }
+
+  .btn-outline-primary {
+    @apply border-primary-500 bg-primary-500/0 text-primary-500 hover:bg-primary-100/40 focus:bg-primary-100/40 active:bg-primary-100/40;
+  }
+
+  .btn-light-primary {
+    @apply bg-primary-100 text-primary-500 hover:bg-primary-500 hover:text-white focus:bg-primary-600 focus:text-white;
+  }
+
+  .btn-link-primary {
+    @apply bg-transparent text-primary-500 hover:bg-primary-100 focus:bg-primary-100/50;
+  }
+
+  .btn-text-primary {
+    @apply bg-transparent text-primary-500 hover:bg-primary-100/40;
+  }
+
+  /* == Forms == */
+  .form-label {
+    @apply mb-2 inline-block text-[14px] font-medium text-theme-text-primary;
+  }
+
+  .form-control {
+    @apply block w-full rounded-lg border border-theme-divider bg-theme-bg-paper px-[14px] py-[16.5px] text-base text-theme-text-primary placeholder:text-[#bec8d0] transition-colors focus:border-primary-500 focus:outline-none disabled:pointer-events-none disabled:bg-secondary-200/10;
+  }
+
+  .form-control[type="file"] {
+    @apply cursor-pointer py-3;
+  }
+
+  .form-select {
+    @apply block w-full appearance-none rounded-lg border border-theme-divider bg-theme-bg-paper py-[0.8rem] pl-3 pr-8 text-base text-theme-text-primary focus:border-primary-500 focus:outline-none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%231d2630' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 16px 12px;
+  }
+
+  /* == Markdown preview (renders generated drafts in /repurpose/[id]) == */
+  .md-preview {
+    @apply font-sans text-[15px] leading-relaxed text-theme-text-primary;
+  }
+
+  .md-preview h1,
+  .md-preview h2,
+  .md-preview h3,
+  .md-preview h4 {
+    @apply mt-5 mb-2 font-display text-theme-text-primary;
+  }
+
+  .md-preview h1 {
+    @apply text-xl font-bold;
+  }
+
+  .md-preview h2 {
+    @apply text-lg font-bold;
+  }
+
+  .md-preview h3 {
+    @apply text-base font-semibold;
+  }
+
+  .md-preview h4 {
+    @apply text-[15px] font-semibold;
+  }
+
+  .md-preview p {
+    @apply my-2;
+  }
+
+  .md-preview ul,
+  .md-preview ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+
+  .md-preview ul {
+    @apply list-disc;
+  }
+
+  .md-preview ol {
+    @apply list-decimal;
+  }
+
+  .md-preview li > p {
+    @apply my-0;
+  }
+
+  .md-preview a {
+    @apply text-primary-500 underline;
+  }
+
+  .md-preview blockquote {
+    @apply my-3 border-l-2 border-primary-500/40 pl-4 italic text-theme-text-secondary;
+  }
+
+  .md-preview hr {
+    @apply my-4 border-theme-divider;
+  }
+
+  .md-preview code {
+    @apply rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] text-primary-500;
+  }
+
+  .md-preview pre {
+    @apply my-3 overflow-x-auto rounded-lg border border-theme-divider bg-neutral-50 p-4 text-[13px];
+  }
+
+  .md-preview pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+}
