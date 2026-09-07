@@ -50,7 +50,7 @@ import { getFreshAccessToken } from "./connections";
 
 const TOKEN_URL = "https://api.bufferapp.com/1/oauth2/token.json";
 
-function stubTokenResponse(body: { access_token: string; refresh_token?: string; expires_in?: number; error?: string }) {
+function stubTokenResponse(body: { access_token?: string; refresh_token?: string; expires_in?: number; error?: string }) {
   const failed = Boolean(body.error);
   vi.stubGlobal(
     "fetch",
@@ -110,7 +110,7 @@ describe("getFreshAccessToken — token freshness", () => {
 
   it("returns the stored token untouched when it is still valid", async () => {
     behavior["buffer_connections"] = connectionRow({
-      access_token_expires_at: new Date(Date.now() + 60_000).toISOString()
+      access_token_expires_at: new Date(Date.now() + 3600_000).toISOString()
     });
     const fresh = await getFreshAccessToken("u1");
     expect(fresh).toEqual({ token: "tok-1", refreshed: false });

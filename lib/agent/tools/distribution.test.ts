@@ -332,7 +332,7 @@ describe("distributionTool — real Buffer publish path", () => {
     mockFetchRoutes({
       "https://api.bufferapp.com/1/profiles.json?access_token=tok-1": {
         ok: true,
-        body: [{ id: "p1", service: "x" }]
+        body: [{ id: "p1", service: "twitter" }]
       },
       "https://api.bufferapp.com/1/updates/create.json": { ok: true, body: { success: true, update_id: "sched-9" } }
     });
@@ -351,6 +351,6 @@ describe("distributionTool — real Buffer publish path", () => {
     expect((jobUpdate.payload as { status?: string }).status).toBe("scheduled");
     expect((jobUpdate.payload as { external_id?: string }).external_id).toBe("sched-9");
     expect((jobUpdate.payload as { scheduled_at?: string }).scheduled_at).toBe(when);
-    expect(jobUpdate.payload as { published_at?: unknown }).published_at).toBeUndefined();
+    expect((jobUpdate.payload as { published_at?: unknown }).published_at).toBeUndefined();
   });
 });

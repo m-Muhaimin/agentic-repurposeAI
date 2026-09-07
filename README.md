@@ -60,8 +60,12 @@ YouTube-URL path needs a host that provides them — the file-upload and transcr
    (one Gemini call), you approve/keep angles per idea → drafts are generated per angle + suggested
    format, scored against a deterministic rubric (length / format-shape / grounding), and flagged weak
    drafts get at most one auto-revision in `execute` mode. Agent drafts land in the same `outputs`
-   table, so they show up immediately in `/library` and the editor. Distribution (schedule/publish) is
-   deliberately stubbed and gated off — see `docs/AGENTIC_ROADMAP.md`.
+   table, so they show up immediately in `/library` and the editor.
+6. **Distribution** — bring your own Buffer account: connect it on `/connections`, then hand each
+   queue item (draft) a target profile and send it now or schedule it ahead from the publish queue
+   panel. Publish is **manual-approval only**, never autonomous. Access tokens are stored
+   AES-256-GCM-encrypted and refreshed automatically near expiry. Full status incl. legacy stubs:
+   see `docs/AGENTIC_ROADMAP.md`.
 
 ## Safety rails (all env-overridable in `lib/limits.ts`)
 Max file size 200 MB, max duration 2 h, per-user rate limit of 10 enqueues/minute, strict extension +
