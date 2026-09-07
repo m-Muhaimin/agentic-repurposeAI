@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { resolvePlan } from "@/lib/billing/entitlements";
 import { getUsageSnapshot } from "@/lib/billing/usage";
 import { getRecentSignals } from "@/lib/agent/memory";
+import { aggregateMonthlySpend, type MonthlyAgentSpend } from "@/lib/agent/spend";
 import { buildCandidates, toStrategyIdea, type StrategyIdea, type StrategyResult } from "@/lib/agent/strategy";
 import type { OutputFormat } from "@/types/agent";
 import { log } from "@/lib/logger";
@@ -70,6 +71,143 @@ function deterministicRationale(res: StrategyResult): string {
       : "No next action: none of your sources has a ready transcript yet. Repurpose or finish transcription on a source first.";
   }
   return `Publish next from "${rec.sourceTitle}"${rec.angleTitle ? ` around the angle "${rec.angleTitle}"` : ""} as ${rec.formats.length ? rec.formats.join(", ") : "your usual formats"}. It ranks highest on your objective scores and recent behaviour. You have ${headroom.jobsRemaining === null ? "no monthly cap" : `${headroom.jobsRemaining} job${headroom.jobsRemaining === 1 ? "" : "s"} left this month`}; a run here stays within your ${headroom.perRunAgent.maxSteps}-step budget.`;
+}
+
+// GET /api/agent/strategy/next — passive read of the latest strategy snapshot
+// + a fresh deterministic recomputation of buildCandidates (no LLM call, no
+// write). The strategy panel loads passively from this; only the "Publish next"
+// button triggers a POST to refresh the rationale.
+export async function GET() {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const service = createServiceClient();
+  const userId = user.id;
+
+  const plan = await resolvePlan(userId);
+  const usage = await getUsageSnapshot(userId, plan);
+  const now = new Date();
+
+  // Sources
+  let sourcesOut: Array<{ id: string; title: string; hasTranscript: boolean }> = [];
+  try {
+    const { data: sources } = await service
+      .from("sources")
+      .select("id, title, status, transcript")
+      .eq("user_id", userId);
+    sourcesOut = (sources ?? []).map((s: { id: string; title: string | null; status: string; transcript: string | null }) => ({
+      id: s.id,
+      title: s.title ?? "Untitled source",
+      hasTranscript: (s.status === "done" || s.status === "failed") && Boolean(s.transcript && s.transcript.trim())
+    }));
+  } catch {
+    sourcesOut = [];
+  }
+
+  // Ideas + runs → StrategyIdea[]
+  let ideas: StrategyIdea[] = [];
+  try {
+    const [{ data: runs }, { data: ideaRows }] = await Promise.all([
+      service.from("v4_agent_runs").select("id, source_id").eq("user_id", userId),
+      service.from("v4_content_ideas").select("id, run_id, title, suggested_formats, evaluation").eq("user_id", userId)
+    ]);
+    const sourceByRun: Record<string, string> = {};
+    for (const r of (runs ?? []) as Array<{ id: string; source_id: string }>) sourceByRun[r.id] = r.source_id;
+    ideas = (ideaRows ?? [])
+      .map((row: { run_id: string; title: string; suggested_formats: unknown; evaluation: unknown }) =>
+        toStrategyIdea(row, sourceByRun)
+      )
+      .filter((i: StrategyIdea) => i.sourceId);
+  } catch {
+    ideas = [];
+  }
+
+  // Recent output formats
+  const seen = new Set<string>();
+  let recentFormats: string[] = [];
+  try {
+    const { data: outputs } = await service
+      .from("outputs")
+      .select("format")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    recentFormats = (outputs ?? [])
+      .map((o: { format: string }) => o.format)
+      .filter((f: string) => {
+        if (seen.has(f)) return false;
+        seen.add(f);
+        return true;
+      });
+  } catch {
+    recentFormats = [];
+  }
+
+  const signals = await getRecentSignals(userId);
+  const agentBudget = plan.limits.agent;
+
+  // P9: Query monthly agent runs for the spend summary (service-role, never
+  // trust client-supplied data). Aggregates real token counts + cost units.
+  let monthlySpend: MonthlyAgentSpend | null = null;
+  try {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const { data: monthRuns } = await service
+      .from("v4_agent_runs")
+      .select("input_tokens, output_tokens, cost_units, status")
+      .eq("user_id", userId)
+      .gte("created_at", monthStart);
+    monthlySpend = aggregateMonthlySpend(monthRuns ?? []);
+  } catch {
+    monthlySpend = null;
+  }
+
+  const result = buildCandidates({
+    sources: sourcesOut,
+    ideas,
+    signals,
+    recentFormats: recentFormats as OutputFormat[],
+    budget: { jobsLimit: plan.limits.maxJobsPerMonth, jobsUsed: usage.jobsUsed, agent: agentBudget }
+  });
+
+  // Fetch the latest snapshot (if any) for its LLM rationale. Ordered by
+  // created_at desc; we only need one row.
+  let latestRationale: string | null = null;
+  let strategyId: string | null = null;
+  try {
+    const { data: snap } = await service
+      .from("v4_content_strategies")
+      .select("id, body, created_at")
+      .eq("user_id", userId)
+      .eq("source", "planner")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (snap?.body) {
+      strategyId = snap.id;
+      // The body contains the rationale as the last newline-separated block
+      // after the metadata lines. Extract it.
+      const lines = snap.body.split("\n");
+      const metaPrefixes = ["Recommendation:", "Budget:", "Per-run:"];
+      const rationaleStart = lines.findIndex((line: string) => !metaPrefixes.some((p) => line.startsWith(p)));
+      latestRationale = rationaleStart >= 0 ? lines.slice(rationaleStart).join("\n").trim() : snap.body;
+    }
+  } catch {
+    // No snapshot yet — that's fine.
+  }
+
+  return NextResponse.json({
+    ok: true,
+    strategyId,
+    recommended: result.recommended,
+    ranked: result.ranked,
+    exclusions: result.exclusions,
+    headroom: result.headroom,
+    rationale: latestRationale,
+    monthlySpend
+  });
 }
 
 export async function POST() {
@@ -149,6 +287,21 @@ export async function POST() {
   // 5) Budget (jobs read is display-grade, matching the base app).
   const agentBudget = plan.limits.agent;
 
+  // P9: Monthly agent spend summary (service-role query).
+  const postNow = new Date();
+  let monthlySpendPost: MonthlyAgentSpend | null = null;
+  try {
+    const monthStart = new Date(Date.UTC(postNow.getUTCFullYear(), postNow.getUTCMonth(), 1)).toISOString();
+    const { data: monthRuns } = await service
+      .from("v4_agent_runs")
+      .select("input_tokens, output_tokens, cost_units, status")
+      .eq("user_id", userId)
+      .gte("created_at", monthStart);
+    monthlySpendPost = aggregateMonthlySpend(monthRuns ?? []);
+  } catch {
+    monthlySpendPost = null;
+  }
+
   const result = buildCandidates({
     sources: sourcesOut,
     ideas,
@@ -201,6 +354,7 @@ export async function POST() {
     ranked: result.ranked,
     exclusions: result.exclusions,
     headroom: result.headroom,
-    rationale
+    rationale,
+    monthlySpend: monthlySpendPost
   });
 }

@@ -64,10 +64,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 | User account deletion / privacy | 🟡 | All `V4_` tables cascade from `auth.users`, so account deletion cleans Agentic data too; no explicit export/delete flow yet (matches the base roadmap). |
 
 ## Suggested sequencing
-🟡 Current: add a max-budget guard for `automate`, then build real Stage 4 publish actions. The editor save path is now wired to `recordEditSignal` (P4), so Stage 2 is complete.
+🟡 Current: P9 done (real token counting + honest spend surfaces). Next: build real Stage 4 publish actions, then Stage 3 depth/quality improvements.
 
 > V2 master program status: `docs/agentic-v2-audit.md` is the Phase 0 as-found baseline;
-> phases P0–P14 are tracked in the session todo list (P0 + P1 complete, P2 complete, P3 complete, P4 complete).
+> phases P0–P14 are tracked in the session todo list (P0 + P1 complete, P2 complete, P3 complete, P4 complete, P5 complete, P6 complete, P7 complete, P8 complete, P9 complete).
 >
 > **P1 (baseline hardening) closed:** migration `20260907000005_agentic_v4_tables.sql` makes the
 > six `V4_` tables reproducible from `supabase db push` (live project untouched — guarded);
@@ -119,3 +119,92 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 > schema change — `edit_signals` jsonb already exists. New vitest suite:
 > `lib/agent/edit-diff.test.ts` (7 tests). Green: `tsc --noEmit`, `npm run build`,
 > RLS **24/24**, agentic **29/29**, 53 unit tests.
+>
+> **P5 (strategy agent) closed — the V1→V2 crossing gate PASSED.** `POST
+> /api/agent/strategy/next` answers "what should I publish next?" **without
+> requiring the user to pick a source first** — it derives the candidate pool
+> server-side from the user's own data (ready-transcript sources, existing
+> `v4_content_ideas` with their P3 objective scores, edit/angle signals, recent
+> output formats, and the monthly/plan budget) and returns a recommended next
+> action + ranked alternatives + per-candidate why-not. The pure core is the new
+> `lib/agent/strategy.ts` (`buildCandidates(sources, ideas, signals, budget) →
+> { recommended, ranked, exclusions, headroom }`, plus `computeBudgetHeadroom`
+> and a `toStrategyIdea` adapter) — fully unit-testable with no live DB. The
+> deterministic scoring is grounded in P3 scores (neutral baseline for fresh
+> sources), a rejected-angle penalty (P4 signals), and a format-diversity bonus,
+> with budget gates (`NO_READY_TRANSCRIPT`, `BUDGET_CEILING`) producing explicit
+> why-nots. The LLM adds exactly ONE advisory rationale call (GEMINI via the
+> repo's existing provider, no retry loop) that can never override the
+> deterministic decision and degrades to a factual restatement. The output is
+> hand-shaped to the existing runs POST contract (`sourceId` + `mode`), so a UI
+> "publish next" can drop straight into the existing orchestrator — the strategy
+> feeds, never forks, that flow. Persistence reuses the existing
+> `v4_content_strategies` table's `planner` source enum (append-only,
+> user-scoped, RLS-protected snapshots) — **no schema change, no migration**, so
+> the live DB is untouched and verify-agentic checks (already present for the P5
+> snapshot path) stay green. New vitest suite: `lib/agent/strategy.test.ts` (9
+> tests). **Gate trace:** sources/ideas/signals/budget are all read
+> server-side → `buildCandidates` derives the pool with no preselected source →
+> recommendation formed from user's own data ✓. Green: `tsc --noEmit`, `npm run
+> build`, RLS **24/24**, agentic **32/32**, 62 unit tests.
+>
+> **P6 (strategy surface) closed.** The `/agent` page now carries a passive,
+> read-mostly **strategy panel** (`components/agent/strategy-panel.tsx`) that
+> consumes the strategy route without triggering a new strategy write — a new
+> `GET /api/agent/strategy/next` recomputes `buildCandidates` deterministically,
+> reads the latest persisted `planner` snapshot for its LLM rationale, and does
+> NOT write or call the LLM. The panel shows: the recommended next publish
+> (source → angle → formats + objective score), a collapsible ranked
+> alternatives list, the why-not exclusions (per-source code + detail), the
+> remaining budget headroom from real server data (`jobsRemaining` +
+> per-run agent budgets), and a one-call **"Publish next"** action that selects
+> a mode and routes into the existing `POST /api/agent/runs` via the workspace's
+> `startRun`, dropping the created run straight into the existing
+> plan → approve → drafts flow. Pure formatters (`lib/agent/strategy-panel-helpers.ts`:
+> `formatScore`, `formatHeadroom`, `formatExclusionCode`) are unit-tested (10
+> tests). Everything is server-authoritative: the panel requests, the server
+> decides. Loading skeleton + graceful empty/error states consistent with the
+> card grammar. No new auth.
+>
+> **P7 (decision + rationale surfaces) closed.** The run/draft UI now exposes
+> the **decision trail** honestly from real data. In the run detail, each
+> planned angle shows its keep/reject badge (from `v4_content_ideas.approved`),
+> its P3 objective score + sub-dimensions (grounding/distinctness/specificity)
+> + flagged weakness (from `ideas.evaluation`), and its rationale. The approval
+> gate (`PlanView`) also surfaces the P3 score + weakness on each angle so the
+> user sees *why* before deciding. A **"What the agent remembers"** readout
+> (fed by `getRecentSignals` via the run-detail route, which now also returns
+> the user's recent signals) renders the last few edit / angle-decision /
+> preference signals — real data, never fabricated. The run-detail route gained
+> one read (`getRecentSignals`) — no schema change.
+>
+> **P8 (budget + cost visibility) closed.** Real, server-derived budget is
+> surfaced read-only. The strategy panel shows live monthly headroom
+> (`jobsUsed/jobsLimit/jobsRemaining` from `getUsageSnapshot` + `resolvePlan`)
+> and the per-run agent budget snapshot. The run detail now includes a **"Run
+> budget"** card showing the run's snapshotted `max_steps` / `max_cost_units` /
+> `max_runtime_s` columns against the run's `step_count` / `cost_units`, with a
+> simple cost-usage bar computed only when both numbers are real (no invented
+> figures, no fake charts). This is the P9 groundwork: read-only, no pricing or
+> billing UI built. Green: `tsc --noEmit`, `npm run build`, RLS **24/24**,
+> agentic **32/32**, 72 unit tests.
+
+> **P9 (cost/spend surfaces) closed.** Honest, per-step spend is now recorded
+> and surfaced, with every figure labeled. `lib/agent/spend.ts` (pure, no I/O)
+> converts real provider-observed token counts into estimated USD at published
+> rates (`PROVIDER_RATES`), preserves the existing `cost_units` formula exactly
+> (`Math.round((in+out)/100)/100`), and aggregates per-step (`aggregateRunSpend`),
+> per-run, and per-month (`aggregateMonthlySpend`) spend. The orchestrator
+> thread real `usageMetadata` token counts (Gemini path) from
+> `lib/ai/generate.ts` → `GenerationResult` through the generation tool into
+> planning/generation step outputs as `spend` events, and persists accumulated
+> real token totals on the run row (`input_tokens`/`output_tokens`). When the
+> provider returns no usage metadata (OpenRouter fallback), the orchestrator
+> falls back to the P2 estimate heuristic and labels the spend `estimated`.
+> P2 budget guards in `lib/agent/budgets.ts` remain the single stop source — P9
+> adds no parallel stop logic. UI: the run detail "Run budget" card now shows
+> estimated USD + token split + per-step breakdown (each step labeled
+> actual/estimated), and the strategy panel shows a "Monthly agent spend" block.
+> All spend data is server-computed (service-role), never client-supplied.
+> Green: `tsc --noEmit`, `npm run build`, RLS **24/24**, agentic **32/32**,
+> **106** unit tests (11 files).

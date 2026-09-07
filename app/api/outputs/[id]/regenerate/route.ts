@@ -105,11 +105,12 @@ export async function POST(_request: Request, { params }: { params: { id: string
     } catch {
       // Keep defaults if the prompt table query fails for any reason.
     }
-    content = await generateOutput(
+    const result = await generateOutput(
       output.format as OutputFormat,
       source.transcript,
       buildSystemPrompt(output.format as OutputFormat, promptMap)
     );
+    content = result.content;
     log.info("output.regenerated", {
       output_id: output.id,
       source_id: output.source_id,

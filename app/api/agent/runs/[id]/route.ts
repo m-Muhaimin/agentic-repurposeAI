@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { getRecentSignals } from "@/lib/agent/memory";
 import { log } from "@/lib/logger";
 
 // GET /api/agent/runs/[id] — full detail for the agent workspace: the run row,
 // its content ideas (the plan's approval surface), its durable step timeline,
-// and the generated draft outputs.
+// the generated draft outputs, and the user's recent memory signals (for P7
+// decision-trail surface).
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,7 +26,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .maybeSingle();
   if (error || !run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
 
-  const [ideasResult, stepsResult, outputsResult] = await Promise.all([
+  const [ideasResult, stepsResult, outputsResult, signals] = await Promise.all([
     service
       .from("v4_content_ideas")
       .select("*")
@@ -34,7 +36,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     service.from("v4_agent_steps").select("*").eq("run_id", id).eq("user_id", user.id).order("created_at", { ascending: true }),
     run.output_ids.length > 0
       ? service.from("outputs").select("*").in("id", run.output_ids).eq("user_id", user.id)
-      : Promise.resolve({ data: [], error: null })
+      : Promise.resolve({ data: [], error: null }),
+    getRecentSignals(user.id)
   ]);
 
   const ideas = ideasResult.data ?? [];
@@ -43,5 +46,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   log.info("agent.run_detail", { run_id: id, user_id: user.id });
 
-  return NextResponse.json({ run, ideas, steps, outputs });
+  return NextResponse.json({ run, ideas, steps, outputs, signals });
 }

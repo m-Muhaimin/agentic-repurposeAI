@@ -29,6 +29,7 @@ import type { AgentMode, AgentRunRow, ContentPlan, OutputFormat, RunStatus, Stop
 import { budgetViolation, type BudgetSnapshot } from "@/lib/agent/budgets";
 import { describeError, isTransientError, MAX_PHASE_ATTEMPTS } from "@/lib/agent/errors";
 import { scoreAngle } from "@/lib/agent/idea-scoring";
+import { buildSpendEvent, tokensToCostUnits } from "@/lib/agent/spend";
 import { generationTool } from "@/lib/agent/tools/generation";
 import { intelligenceTool } from "@/lib/agent/tools/intelligence";
 import { sourceTool } from "@/lib/agent/tools/source";
@@ -79,6 +80,8 @@ interface RunRowLite {
 interface RunOutcome {
   reason: StopReason;
   costUnits: number;
+  inputTokens: number;
+  outputTokens: number;
   outputIds: string[];
   completed: number; // drafts written
   attempted: number; // drafts attempted
@@ -220,7 +223,7 @@ async function runPlanning(
 
   const control = await touchRun(service, runId);
   if (!control || control === "cancelled") {
-    return { reason: "cancelled", costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
+    return { reason: "cancelled", costUnits: run.cost_units ?? 0, inputTokens: 0, outputTokens: 0, outputIds: [], completed: 0, attempted: 0 };
   }
 
   const srcCtx = { userId, runId, mode };
@@ -250,28 +253,46 @@ async function runPlanning(
   send("progress", { stage: "Planning angles", pct: 20 });
   const planGuard = await touchRun(service, runId);
   if (!planGuard || planGuard === "cancelled") {
-    return { reason: "cancelled", costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
+    return { reason: "cancelled", costUnits: run.cost_units ?? 0, inputTokens: 0, outputTokens: 0, outputIds: [], completed: 0, attempted: 0 };
   }
 
   const planResult = await intelligenceTool.run(srcCtx, { transcript: sourceOut.transcript });
-  await recordStep(
-    service,
-    runId,
-    userId,
-    "planning",
-    planResult.ok ? "done" : "failed",
-    "Plan content angles",
-    { transcriptLength: sourceOut.transcript.length },
-    planResult.ok ? planResult.data : { error: planResult.error }
-  );
-  if (!planResult.ok) throw new Error(planResult.error ?? "Planning failed.");
+  if (!planResult.ok) {
+    await recordStep(
+      service,
+      runId,
+      userId,
+      "planning",
+      "failed",
+      "Plan content angles",
+      { transcriptLength: sourceOut.transcript.length },
+      { error: planResult.error }
+    );
+    throw new Error(planResult.error ?? "Planning failed.");
+  }
   planningGuard(3, 0, "planning the angles");
 
   const plan = (planResult.data as { plan: ContentPlan }).plan;
   const inputTokens = (planResult.data as { inputTokens: number }).inputTokens ?? 0;
   const outputTokens = (planResult.data as { outputTokens: number }).outputTokens ?? 0;
-  const costUnits = Math.round((inputTokens + outputTokens) / 100) / 100;
+  const costUnits = tokensToCostUnits(inputTokens, outputTokens);
   const totalCost = Math.round((costUnits + (run.cost_units ?? 0)) * 100) / 100;
+
+  // Record the planning step with spend data (real usageMetadata from Gemini).
+  await recordStep(
+    service,
+    runId,
+    userId,
+    "planning",
+    "done",
+    "Plan content angles",
+    { transcriptLength: sourceOut.transcript.length },
+    {
+      planSummary: plan.summary,
+      angles: plan.angles.length,
+      spend: buildSpendEvent({ inputTokens, outputTokens }, "gemini")
+    }
+  );
 
   // Persist the plan + each angle as a v4_content_ideas row for the approval UI.
   await service
@@ -323,7 +344,7 @@ async function runPlanning(
     output_tokens: outputTokens
   });
 
-  return { reason: null, costUnits: totalCost, outputIds: [], completed: 0, attempted: 0 };
+  return { reason: null, costUnits: totalCost, inputTokens, outputTokens, outputIds: [], completed: 0, attempted: 0 };
 }
 
 // ── Execution phase: approved ideas → drafts → evaluation → done ────────────
@@ -352,7 +373,7 @@ async function runExecution(
   if (approvedIdeas.length === 0) {
     // All angles rejected — a legitimately empty run, not a failure.
     send("progress", { stage: "No approved angles", pct: 100 });
-    return { reason: null, costUnits: run.cost_units ?? 0, outputIds: [], completed: 0, attempted: 0 };
+    return { reason: null, costUnits: run.cost_units ?? 0, inputTokens: 0, outputTokens: 0, outputIds: [], completed: 0, attempted: 0 };
   }
 
   // Budgets are snapshotted columns on the run row (set at creation from the
@@ -371,6 +392,8 @@ async function runExecution(
   // to this run.
   const outputIds = [...(run.output_ids ?? [])];
   let estimatedTokens = 0;
+  let accumulatedInputTokens = 0; // real generation tokens (0 when unknown)
+  let accumulatedOutputTokens = 0;
   let currentCost = run.cost_units ?? 0;
   let localSteps = 0;
   let attempted = 0;
@@ -397,13 +420,13 @@ async function runExecution(
       //    stops cleanly here; whatever drafts already arrived are kept.
       const control = await touchRun(service, runId);
       if (!control || control === "cancelled") {
-        return { reason: "cancelled", costUnits: currentCost, outputIds, completed, attempted };
+        return { reason: "cancelled", costUnits: currentCost, inputTokens: run.input_tokens + accumulatedInputTokens, outputTokens: run.output_tokens + accumulatedOutputTokens, outputIds, completed, attempted };
       }
 
       // Budget guard before the next LLM call — trip BEFORE spending.
       const violation = guard(1, estGenCost);
       if (violation) {
-        return { reason: violation, costUnits: currentCost, outputIds, completed, attempted };
+        return { reason: violation, costUnits: currentCost, inputTokens: run.input_tokens + accumulatedInputTokens, outputTokens: run.output_tokens + accumulatedOutputTokens, outputIds, completed, attempted };
       }
 
       // 1) Generate
@@ -417,6 +440,14 @@ async function runExecution(
       });
       localSteps += 1;
       attempted += 1;
+
+      // Extract real token counts from the generation result (actual when the
+      // provider returned usage metadata, 0 when unknown).
+      const genData = gen.ok ? (gen.data as { outputId: string; content: string; inputTokens: number; outputTokens: number }) : null;
+      const genInputTokens = genData?.inputTokens ?? 0;
+      const genOutputTokens = genData?.outputTokens ?? 0;
+      const genTokenSource: "actual" | "estimated" = genInputTokens > 0 || genOutputTokens > 0 ? "actual" : "estimated";
+
       await recordStep(
         service,
         runId,
@@ -425,20 +456,42 @@ async function runExecution(
         gen.ok ? "done" : "failed",
         `Generate ${format} — ${idea.title}`,
         { ideaId: idea.id, format },
-        gen.ok ? { outputId: (gen.data as { outputId: string }).outputId } : { error: gen.error }
+        gen.ok
+          ? {
+              outputId: genData!.outputId,
+              spend: buildSpendEvent({ inputTokens: genInputTokens, outputTokens: genOutputTokens }, "gemini", genTokenSource)
+            }
+          : { error: gen.error }
       );
       if (!gen.ok) continue; // one bad draft doesn't sink the run
 
       const { outputId, content } = gen.data as { outputId: string; content: string };
       if (!outputIds.includes(outputId)) outputIds.push(outputId);
       completed += 1;
-      estimatedTokens += estimateGenerationTokens(transcript, content);
-      currentCost = Math.round((currentCost + estimateGenerationTokens(transcript, content) / 100) * 100) / 100;
+
+      // Accumulate real token counts (actual when available, 0 when unknown).
+      // Total run tokens are persisted on the run row for the spend summary UI.
+      if (genInputTokens > 0 || genOutputTokens > 0) {
+        // Real token counts from the provider — accumulate directly.
+        const stepCostUnits = tokensToCostUnits(genInputTokens, genOutputTokens);
+        currentCost = Math.round((currentCost + stepCostUnits) * 100) / 100;
+        // Track total tokens for the run row (planning tokens are already in
+        // run.input_tokens / run.output_tokens, so we add on top).
+        accumulatedInputTokens += genInputTokens;
+        accumulatedOutputTokens += genOutputTokens;
+        estimatedTokens += genInputTokens + genOutputTokens;
+      } else {
+        // Fallback: the provider didn't return usage metadata (OpenRouter path).
+        // Use the coarse estimate so budget enforcement stays functional.
+        const fallbackTokens = estimateGenerationTokens(transcript, content);
+        estimatedTokens += fallbackTokens;
+        currentCost = Math.round((currentCost + fallbackTokens / 100) * 100) / 100;
+      }
 
       // 2) Evaluate (deterministic — no LLM, but counts as a step)
       const evalGuard = guard(1, 0);
       if (evalGuard) {
-        return { reason: evalGuard, costUnits: currentCost, outputIds, completed, attempted };
+        return { reason: evalGuard, costUnits: currentCost, inputTokens: run.input_tokens + accumulatedInputTokens, outputTokens: run.output_tokens + accumulatedOutputTokens, outputIds, completed, attempted };
       }
       send("progress", { stage: `Rating ${format}`, pct: 85 });
       const review = await reviewTool.run(ctx, { format, transcript, content });
@@ -461,7 +514,7 @@ async function runExecution(
       if (rv.evaluation.weak && rv.canRevise && rv.revisionInstruction) {
         const revGuard = guard(1, estGenCost);
         if (revGuard) {
-          return { reason: revGuard, costUnits: currentCost, outputIds, completed, attempted };
+          return { reason: revGuard, costUnits: currentCost, inputTokens: run.input_tokens + accumulatedInputTokens, outputTokens: run.output_tokens + accumulatedOutputTokens, outputIds, completed, attempted };
         }
         send("progress", { stage: `Revising ${format}`, pct: 92 });
         const revise = await generationTool.run(ctx, {
@@ -517,6 +570,8 @@ async function runExecution(
   return {
     reason: null,
     costUnits: Math.round((currentCost) * 100) / 100,
+    inputTokens: run.input_tokens + accumulatedInputTokens,
+    outputTokens: run.output_tokens + accumulatedOutputTokens,
     outputIds,
     completed,
     attempted
@@ -543,13 +598,21 @@ async function finalizeRun(
     finished_at: now
   };
 
+  // Persist accumulated token counts. Planning already wrote input/output
+  // tokens during its phase; execution adds generation tokens on top. We
+  // merge here so the final run row reflects the total.
+  const tokenPatch = outcome.inputTokens > 0 || outcome.outputTokens > 0
+    ? { input_tokens: outcome.inputTokens, output_tokens: outcome.outputTokens }
+    : {};
+
   let patch: Record<string, unknown>;
   if (outcome.reason === null) {
-    patch = { ...common, status: "done", error_message: null } as never;
+    patch = { ...common, ...tokenPatch, status: "done", error_message: null } as never;
   } else if (outcome.reason === "cancelled") {
     const phaseText = phase === "planning" ? "planning angles" : "generating drafts";
     patch = {
       ...common,
+      ...tokenPatch,
       status: "cancelled",
       error_message: `Cancelled by you while ${phaseText}. Completed drafts are saved in your library.`
     } as never;
@@ -557,6 +620,7 @@ async function finalizeRun(
     const label = outcome.reason === "steps" ? "step" : outcome.reason === "cost" ? "cost" : "runtime";
     patch = {
       ...common,
+      ...tokenPatch,
       status: "failed",
       error_message: `Run stopped at its ${label} budget; ${outcome.completed} of ${outcome.attempted} planned draft${outcome.attempted === 1 ? "" : "s"} completed and saved in your library.`
     } as never;

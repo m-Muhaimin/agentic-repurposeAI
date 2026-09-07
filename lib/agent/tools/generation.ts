@@ -30,6 +30,8 @@ export interface GenerationOutput {
   content: string;
   outputId: string;
   revised: boolean;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export const generationTool: AgentTool = {
@@ -75,7 +77,10 @@ export const generationTool: AgentTool = {
 
     const systemPrompt = base + angleBlock + revisionBlock + voiceBlock + editContextBlock;
 
-    const content = await generateOutput(g.format, g.transcript, systemPrompt);
+    const genResult = await generateOutput(g.format, g.transcript, systemPrompt);
+    const content = genResult.content;
+    const inputTokens = genResult.inputTokens;
+    const outputTokens = genResult.outputTokens;
 
     const service = createServiceClient();
 
@@ -87,8 +92,8 @@ export const generationTool: AgentTool = {
         .eq("id", g.outputId)
         .eq("user_id", ctx.userId);
       if (error) return { ok: false, data: null, error: error.message };
-      const out: GenerationOutput = { format: g.format, content, outputId: g.outputId, revised: true };
-      log.info("agent.generation_revised", { run_id: ctx.runId, format: g.format, output_id: g.outputId });
+      const out: GenerationOutput = { format: g.format, content, outputId: g.outputId, revised: true, inputTokens, outputTokens };
+      log.info("agent.generation_revised", { run_id: ctx.runId, format: g.format, output_id: g.outputId, input_tokens: inputTokens, output_tokens: outputTokens });
       return { ok: true, data: out };
     }
 
@@ -104,8 +109,8 @@ export const generationTool: AgentTool = {
       .single();
     if (error) return { ok: false, data: null, error: error.message };
 
-    const out: GenerationOutput = { format: g.format, content, outputId: data.id, revised: false };
-    log.info("agent.generation_ok", { run_id: ctx.runId, format: g.format, output_id: data.id });
+    const out: GenerationOutput = { format: g.format, content, outputId: data.id, revised: false, inputTokens, outputTokens };
+    log.info("agent.generation_ok", { run_id: ctx.runId, format: g.format, output_id: data.id, input_tokens: inputTokens, output_tokens: outputTokens });
     return { ok: true, data: out };
   }
 };

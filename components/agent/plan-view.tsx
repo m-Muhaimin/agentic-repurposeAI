@@ -16,6 +16,10 @@ interface IdeaRow {
   quotes: string[] | null;
   rationale: string | null;
   approved: boolean;
+  evaluation?: {
+    score?: number;
+    weakness?: string | null;
+  } | null;
 }
 
 export default function PlanView({
@@ -79,6 +83,13 @@ export default function PlanView({
 
               {idea.rationale && (
                 <p className="mt-2 text-xs text-theme-text-secondary">Why: {idea.rationale}</p>
+              )}
+
+              {idea.evaluation && typeof idea.evaluation.score === "number" && (
+                <p className="mt-1 text-xs text-theme-text-secondary">
+                  Score {Math.round(idea.evaluation.score * 100)}%
+                  {idea.evaluation.weakness && <span className="text-amber-600"> · {idea.evaluation.weakness}</span>}
+                </p>
               )}
             </div>
           </li>

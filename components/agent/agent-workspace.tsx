@@ -7,6 +7,7 @@ import SegmentedControl from "@/components/segmented-control";
 import { AGENT_MODES, AGENT_MODE_LABEL, type AgentMode, type AgentRunSummary } from "@/types/agent";
 import RunList from "./run-list";
 import RunDetail from "./run-detail";
+import StrategyPanel from "./strategy-panel";
 
 export interface AgentSource {
   id: string;
@@ -39,15 +40,17 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startRun() {
-    if (!sourceId || busy) return;
+  async function startRun(srcId?: string, runMode?: AgentMode) {
+    const effectiveSourceId = srcId ?? sourceId;
+    const effectiveMode = runMode ?? mode;
+    if (!effectiveSourceId || busy) return;
     setBusy(true);
     setError(null);
 
     const res = await fetch("/api/agent/runs", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sourceId, mode })
+      body: JSON.stringify({ sourceId: effectiveSourceId, mode: effectiveMode })
     });
     const body = (await res.json()) as { ok?: boolean; run?: { id: string }; error?: string };
 
@@ -84,8 +87,10 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      {/* Left: new run + history */}
+      {/* Left: strategy recommendation + new run + history */}
       <div className="space-y-6">
+        <StrategyPanel onStartRun={startRun} />
+
         <Card>
           <CardHeader title="New run" description="Plan angles from a finished source, approve, generate." />
           <div className="space-y-4 px-5 py-4">
@@ -124,7 +129,7 @@ export default function AgentWorkspace({ initialSources }: { initialSources: Age
 
             <button
               type="button"
-              onClick={startRun}
+              onClick={() => startRun()}
               disabled={busy || !sourceId}
               className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
             >

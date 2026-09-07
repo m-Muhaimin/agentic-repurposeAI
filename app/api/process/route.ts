@@ -219,7 +219,7 @@ export async function POST(request: Request) {
       let doneCount = 0;
       const generated = await Promise.all(
         formats.map(async (format) => {
-          const content = await generateOutput(
+          const result = await generateOutput(
             format,
             doc.text,
             buildSystemPrompt(format, promptMap)
@@ -229,7 +229,7 @@ export async function POST(request: Request) {
             stage: "Generating outputs",
             pct: 82 + Math.round((doneCount / formats.length) * 15)
           });
-          return { format, content };
+          return { format, content: result.content };
         })
       );
 
