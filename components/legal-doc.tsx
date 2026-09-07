@@ -23,6 +23,9 @@ export default function LegalDoc({
           {title}
         </h1>
         <p className="mt-1 text-sm text-theme-text-secondary">Last updated: {updated}</p>
+        <div className="mt-8 rounded-md border border-theme-divider bg-primary-50 px-4 py-3 text-sm font-medium text-primary-600">
+          Not legal advice — pending review
+        </div>
         <div className="mt-8 flex flex-col gap-6 text-sm leading-relaxed text-theme-text-primary">
           {children}
         </div>

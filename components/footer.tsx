@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "./logo";
+import WaitlistForm from "./waitlist-form";
 
 const COLUMNS = [
   {
@@ -18,13 +19,26 @@ const COLUMNS = [
       { label: "Repurpose content", href: "/upload" },
       { label: "Log in", href: "/login" }
     ]
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Privacy", href: "/legal/privacy" },
+      { label: "Terms", href: "/legal/terms" }
+    ]
   }
+];
+
+const TRUST_BADGES = [
+  { label: "SOC 2 coming", icon: "🔒" },
+  { label: "GDPR ready", icon: "🇪🇺" },
+  { label: "Data encrypted", icon: "🛡️" }
 ];
 
 export default function Footer() {
   return (
     <footer className="border-t border-theme-divider bg-neutral-100">
-      <div className="container grid gap-10 py-12 md:grid-cols-[1.5fr_1fr_1fr]">
+      <div className="container grid gap-10 py-12 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div className="max-w-sm">
           <Logo />
           <p className="mt-4 text-sm leading-normal text-theme-text-secondary">
@@ -42,10 +56,14 @@ export default function Footer() {
               className="size-3.5"
               aria-hidden="true"
             >
-              <path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z" />
+              <path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 1 1.3-1.3L12 3z" />
             </svg>
             Free during beta
           </p>
+
+          <div className="mt-6">
+            <WaitlistForm />
+          </div>
         </div>
 
         {COLUMNS.map((col) => (
@@ -70,8 +88,24 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-theme-divider">
-        <div className="container flex flex-col items-center justify-between gap-3 py-5 text-sm text-theme-text-secondary sm:flex-row">
+        <div className="container flex flex-col items-center justify-between gap-4 py-5 text-sm text-theme-text-secondary sm:flex-row">
           <p>© 2026 Repurpose AI</p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <span
+              aria-label="Trust badges"
+              className="inline-flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+            >
+              {TRUST_BADGES.map((item) => (
+                <span
+                  key={item.label}
+                  className="inline-flex items-center gap-1.5 text-xs"
+                >
+                  <span aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                </span>
+              ))}
+            </span>
+          </div>
           <div className="flex items-center gap-5">
             <Link href="/legal/privacy" className="transition-colors hover:text-theme-text-primary">
               Privacy

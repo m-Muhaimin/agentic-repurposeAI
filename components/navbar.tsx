@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Logo from "./logo";
 
@@ -12,9 +12,21 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-theme-divider bg-neutral-100/90 backdrop-blur">
+    <header
+      className={`sticky top-0 z-50 w-full border-b border-theme-divider backdrop-blur transition-all duration-300 ${
+        scrolled ? "bg-neutral-100/95 shadow-sm" : "bg-neutral-100/80"
+      }`}
+    >
       <nav className="container flex h-16 items-center justify-between" aria-label="Main">
         <Logo />
 
@@ -59,28 +71,32 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {open && (
-        <div id="mobile-nav" className="border-t border-theme-divider bg-neutral-100 lg:hidden">
-          <nav className="container flex flex-col gap-1 py-3" aria-label="Mobile">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="nav-link"
-                onClick={() => setOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link href="/login" className="nav-link sm:hidden" onClick={() => setOpen(false)}>
-              Log in
+      <div
+        id="mobile-nav"
+        className={`overflow-hidden border-t border-theme-divider bg-neutral-100 transition-[max-height,opacity] duration-300 ease-in-out lg:hidden ${
+          open ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+        }`}
+        aria-hidden={!open}
+      >
+        <nav className="container flex flex-col gap-1 py-3" aria-label="Mobile">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              className="nav-link"
+              onClick={() => setOpen(false)}
+            >
+              {link.label}
             </Link>
-            <Link href="/upload" className="btn btn-primary mt-1 sm:hidden" onClick={() => setOpen(false)}>
-              Get started
-            </Link>
-          </nav>
-        </div>
-      )}
+          ))}
+          <Link href="/login" className="nav-link sm:hidden" onClick={() => setOpen(false)}>
+            Log in
+          </Link>
+          <Link href="/upload" className="btn btn-primary mt-1 sm:hidden" onClick={() => setOpen(false)}>
+            Get started
+          </Link>
+        </nav>
+      </div>
     </header>
   );
 }

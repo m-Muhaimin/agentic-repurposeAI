@@ -258,4 +258,46 @@
   .md-preview pre code {
     @apply bg-transparent p-0 text-inherit;
   }
+
+  /* == Agent ops center animations == */
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  @keyframes slide-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes progress-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+  .animate-slide-in { animation: slide-in 0.25s ease-out both; }
+  .animate-fade-in { animation: fade-in 0.3s ease-out both; }
+  .animate-progress-shimmer {
+    background-image: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: progress-shimmer 1.5s linear infinite;
+  }
+  .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-soft,
+    .animate-slide-in,
+    .animate-fade-in,
+    .animate-progress-shimmer,
+    .animate-spin-slow {
+      animation: none !important;
+    }
+  }
 }

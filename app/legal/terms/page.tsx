@@ -1,6 +1,6 @@
 import LegalDoc, { LegalHeading } from "@/components/legal-doc";
 
-const CONTACT = "support@repurpose-ai.app";
+const CONTACT = "hello@muhaimin.dev";
 
 export const metadata = {
   title: "Terms of Service — Repurpose AI"
