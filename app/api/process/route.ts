@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { ingestSource, saveTranscript, type IngestionContext } from "@/lib/ingestion";
 import { supabaseContentStore, registerStoreBackedProviders } from "@/lib/ingestion/store";
+import { analyzeContent, assertGrounded } from "@/lib/intelligence";
 import { generateOutput, type OutputFormat } from "@/lib/ai/generate";
 import { buildSystemPrompt } from "@/lib/ai/prompts";
 import { getUserPrompts, type UserPromptMap } from "@/lib/prompts";
@@ -208,6 +209,41 @@ export async function POST(request: Request) {
         await saveTranscript(service, source, doc);
       } catch (err) {
         log.warn("process.transcript_save_failed", {
+          source_id: sourceId,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+
+      // Phase 4: compute + persist per-source content intelligence (topics,
+      // claims, quotes, opportunities, …) — INDEPENDENT of output generation.
+      // Best-effort: intelligence is a value-add, never a reason to fail a job.
+      // Every evidence segment is verified verbatim against the canonical text
+      // (assertGrounded) before the row is written, so a bad segment can never
+      // be persisted as if it came from the source.
+      try {
+        const intelligence = analyzeContent(doc.text, {
+          sourceId,
+          sourceType: source.source_type,
+          title: source.title ?? ""
+        });
+        assertGrounded(intelligence, doc.text);
+        await service
+          .from("content_intelligence")
+          .insert({
+            user_id: userId,
+            source_id: sourceId,
+            intelligence: intelligence as unknown as Record<string, unknown>,
+            provenance: intelligence.provenance
+          })
+          .onConflict("source_id")
+          .merge({ intelligence: intelligence as unknown as Record<string, unknown>, updated_at: new Date().toISOString() });
+        log.info("process.intelligence_persisted", {
+          source_id: sourceId,
+          topics: intelligence.topics.length,
+          opportunities: intelligence.opportunities.length
+        });
+      } catch (err) {
+        log.warn("process.intelligence_save_failed", {
           source_id: sourceId,
           error: err instanceof Error ? err.message : String(err)
         });

@@ -131,6 +131,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["v4_content_strategies"]["Row"]>;
         Relationships: [];
       };
+      content_intelligence: {
+        Row: { id: string; user_id: string; source_id: string; intelligence: unknown; provenance: string; created_at: string; updated_at: string };
+        Insert: Partial<Database["public"]["Tables"]["content_intelligence"]["Row"]> & { user_id: string; source_id: string; intelligence: unknown };
+        Update: Partial<Database["public"]["Tables"]["content_intelligence"]["Row"]>;
+        Relationships: [{ foreignKeyName: "content_intelligence_source_id_fkey"; columns: ["source_id"]; isOneToOne: true; referencedRelation: "sources"; referencedColumns: ["id"] }];
+      };
     };
   };
 };

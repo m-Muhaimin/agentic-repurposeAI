@@ -132,6 +132,47 @@ async function main() {
   check("A can insert their own output", !outErr && outA?.id, outErr?.message);
   outputId = outA?.id;
 
+  console.log("Content intelligence (Phase 4):");
+  const ciPayload = {
+    user_id: aId,
+    source_id: sourceId,
+    intelligence: { topics: [{ label: "rls", confidence: 1 }] },
+    provenance: "deterministic"
+  };
+  const ciIns = await a.from("content_intelligence").insert(ciPayload).select().single();
+  maybeCheck(
+    "A can insert their own content_intelligence row",
+    ciIns,
+    (d) => Boolean(d?.id)
+  );
+  const ciId = ciIns.data?.id;
+  if (ciId) {
+    const ciReadByB = await b.from("content_intelligence").select("*").eq("source_id", sourceId);
+    maybeCheck(
+      "B cannot read A's content_intelligence",
+      ciReadByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const ciUpdByB = await b.from("content_intelligence").update({ provenance: "hacked" }).eq("id", ciId).select();
+    maybeCheck(
+      "B cannot update A's content_intelligence",
+      ciUpdByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const ciDelByB = await b.from("content_intelligence").delete().eq("id", ciId).select();
+    maybeCheck(
+      "B cannot delete A's content_intelligence",
+      ciDelByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const ciUpdByA = await a.from("content_intelligence").update({ provenance: "deterministic" }).eq("id", ciId).select();
+    maybeCheck(
+      "A can update their own content_intelligence",
+      ciUpdByA,
+      (d) => Array.isArray(d) && d.length === 1
+    );
+  }
+
   console.log("Cross-user reads (must see nothing):");
   const bSrc = await b.from("sources").select("*").eq("id", sourceId);
   check("B cannot read A's source", Array.isArray(bSrc.data) && bSrc.data.length === 0, bSrc.error?.message);

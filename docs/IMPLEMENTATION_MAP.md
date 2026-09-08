@@ -448,3 +448,63 @@ providers for real dedupe, and light up/polish the URL + podcast job, retry and
 failure UX end to end.
 - `verify:rls` / `verify:agentic` and live migrations …0002/…0003 still need
   a run against the live project (DB creds not in the repo).
+## Phase 3 — idempotency store + live URL/podcast integrity (delivered)
+
+- **`lib/ingestion/store.ts`** — `supabaseContentStore(service)` implements the
+  `ContentStore` seam (findSourceByHash / transcriptTextFor / persistHash) and
+  `registerStoreBackedProviders(store)` re-registers the document/image/url/
+  podcast providers with it after module load. `ContentStore.persistHash?`
+  + `persistHashSafely` (idempotency.ts) write the `{kind}:{sha256}` key to
+  `sources.content_hash` after a non-reuse ingest; write-back failures never
+  fail the job. The unique partial index from …0002 backstops row-level dedupe.
+- **Worker (`app/api/process/route.ts`)** injects
+  `registerStoreBackedProviders(supabaseContentStore(service))` once per
+  request, before ingest.
+- Re-exported through `lib/ingestion/index.ts` (`supabaseContentStore`,
+  `registerStoreBackedProviders`, `persistHashSafely`) for reuse/tests.
+- **Tests**: `lib/ingestion/store.test.ts` (store seam, no-op/absent-fallback),
+  registry upgrade path. 356 tests / 37 files, `tsc` clean, build green.
+- **Live verification**: real page fetch + `htmlToReadable` + real podcast RSS
+  parse all succeeded against live URLs; `verify:rls` 29/29, `verify:agentic`
+  38/38 (both green on the live project).
+
+## Phase 4 — content intelligence engine (delivered)
+
+Decoupled "understand this source" from "generate from it". A pure, LLM-free,
+fully-grounded extractor turns a canonical transcript into a structured
+`ContentIntelligence` artifact that the worker persists after every successful
+ingest regardless of output formats.
+
+- **`lib/intelligence/types.ts`** — schema: topics, themes, claims (stance
+  assertion/conjecture/citation + heuristic confidence), verbatim quotes,
+  stories, questions (with rhetorical flag), hooks (opening/stat/open_loop/
+  rhetorical), entities, insights (cause_effect/contrast/generalization),
+  derived opportunities, textStats + provenance. Every extraction carries an
+  `EvidenceSegment` (verbatim text + char offsets).
+- **`lib/intelligence/extract.ts`** — deterministic extractors:
+  offset-preserving `splitSentences`; position-weighted topic TF; stem-lite
+  theme clustering; claim scoring by stance markers + topic ties + numeric
+  presence; quote-mark scanning; story runs via sequence markers; rhetorical
+  detection via "set-up + immediately answered" rule; entity frequency with
+  kind guessing; insight marker patterns. `deriveOpportunities` emits
+  `synthesized: true` templates (question-led post, cold-open clip, claim post,
+  story newsletter, pull-quote carousel) — explicitly derived, never generated.
+- **`lib/intelligence/index.ts`** — `analyzeContent` (the only entry) +
+  `assertGrounded` guard: every evidence segment must be a verbatim slice of
+  the source text or the artifact is rejected before persistence.
+- **Migration `…0004`** — `content_intelligence` table (jsonb artifact, one row
+  per source via unique `source_id`, owner RLS policies, user index).
+  Fully idempotent (policy/constraint guards). Applied to the live project;
+  re-apply verified.
+- **`types/supabase.ts`** — `content_intelligence` Row/Insert/Update types.
+- **Worker** — `analyzeContent` → `assertGrounded` → best-effort upsert after
+  `saveTranscript`, before generation; failures are logged, never job-fatal.
+- **`scripts/verify-rls.mjs`** — cross-user checks for the new table (insert/
+  read/update/delete isolation). 29 checks (was 24); live run green.
+- **Tests**: `lib/intelligence/intelligence.test.ts` — 12 tests incl. offset
+  integrity and the tamper-rejection guard. 368 tests / 38 files, `tsc` clean,
+  build green.
+
+Next step (Phase 5): an Output Registry — `OutputDefinition` + registry +
+compatibility surface so opportunity→output recommendations (Phase 6) resolve
+against a first-class catalog instead of a hard-coded list.
