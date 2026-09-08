@@ -21,7 +21,7 @@ export async function generateOutputViaOpenRouter(
       "Content-Type": "application/json",
       // OpenRouter asks for these so free-tier traffic can be attributed to your app.
       "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-      "X-Title": "Repurpose AI"
+      "X-Title": "VervAI"
     },
     body: JSON.stringify({
       model: FALLBACK_MODEL,

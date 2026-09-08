@@ -78,7 +78,7 @@ export default function LoginPage() {
   const titles: Record<Mode, { h1: string; p: string; button: string }> = {
     signin: {
       h1: "Welcome back",
-      p: "One recording, three posts.",
+      p: "One recording, three drafts — ready to edit.",
       button: "Sign in"
     },
     signup: {
@@ -251,7 +251,7 @@ export default function LoginPage() {
 
         {mode !== "reset" && (
           <p className="mt-4 text-center text-xs text-theme-text-secondary">
-            Beta is free — your first 5 repurpose jobs every month are on us. No card, no auto-renew.
+            Beta is free — your first 5 VervAI jobs every month are on us. No card, no auto-renew.
           </p>
         )}
 

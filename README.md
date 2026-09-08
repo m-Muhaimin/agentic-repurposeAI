@@ -1,4 +1,4 @@
-# Repurpose AI
+# VervAI
 
 A long-form → short-form content engine: upload an audio/video file, a YouTube URL, or a subtitle
 file, and get back a LinkedIn post, a newsletter section, and short-form video scripts — generated

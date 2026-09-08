@@ -3,7 +3,7 @@ import LegalDoc, { LegalHeading } from "@/components/legal-doc";
 const CONTACT = "hello@muhaimin.dev";
 
 export const metadata = {
-  title: "Terms of Service — Repurpose AI"
+  title: "Terms of Service — VervAI"
 };
 
 export default function TermsPage() {
@@ -12,10 +12,10 @@ export default function TermsPage() {
       <section>
         <LegalHeading>What this is</LegalHeading>
         <p>
-          Repurpose AI (the &ldquo;service&rdquo;) takes audio/video recordings or YouTube links
+          VervAI (the &ldquo;service&rdquo;) takes audio/video recordings or YouTube links
           you give us and produces written drafts (LinkedIn posts, newsletter sections, short-form
           scripts) using third-party AI services. These terms are a plain-English summary of the
-          deal between you and the maintainer of Repurpose AI. They are not legal advice.
+          deal between you and the maintainer of VervAI. They are not legal advice.
         </p>
       </section>
 

@@ -57,7 +57,7 @@ export function UsageNotice({ usage, className = "" }: { usage: ClientUsage | nu
         className={`rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 ${className}`}
       >
         <p className="font-medium">
-          You&apos;ve used all {usage.limit} repurpose jobs for {usage.windowLabel}.
+          You&apos;ve used all {usage.limit} VervAI jobs for {usage.windowLabel}.
         </p>
         <p className="mt-0.5">
           They reset {formatResetDate(usage.resetAt)}. Your saved content and drafts stay in your

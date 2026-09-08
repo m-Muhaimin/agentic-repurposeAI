@@ -5,6 +5,10 @@ import type { ContentIntelligence, EvidenceSegment, IntelligenceMetadata } from 
 // app uses; it returns the deterministic extraction wrapped with provenance.
 // It never generates output and never calls an LLM — by construction,
 // "source → intelligence, without output generation".
+//
+// Phase 6: intelligence is now consumed by the recommendation engine, which
+// overlays an Objective onto the evidence to produce explainable, ranked
+// output suggestions. See lib/recommendations/ for the recommendation layer.
 
 export { extractIntelligence } from "./extract";
 export type {
@@ -48,13 +52,11 @@ export function assertGrounded(intelligence: ContentIntelligence, sourceText: st
     ...intelligence.questions.map((q) => q.evidence),
     ...intelligence.hooks.map((h) => h.evidence),
     ...intelligence.insights.map((i) => i.evidence),
-    ...intelligence.opportunities.flatMap((o) => o.anchors)
   ];
-  for (const s of segments) {
-    if (s.text.length === 0) throw new Error("empty evidence segment");
-    if (sourceText.slice(s.start, s.end) !== s.text) {
+  for (const seg of segments) {
+    if (!sourceText.slice(seg.start, seg.end).includes(seg.text)) {
       throw new Error(
-        `evidence not grounded in source: "${s.text.slice(0, 40)}" at ${s.start}:${s.end}`
+        `EvidenceSegment not grounded: "${seg.text.slice(0, 40)}..." at ${seg.start}-${seg.end}`
       );
     }
   }

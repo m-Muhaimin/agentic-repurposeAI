@@ -11,7 +11,8 @@
     "verify:agentic": "node scripts/verify-agentic.mjs",
     "db:types": "node scripts/gen-types.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "brand-check": "node scripts/brand-check.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

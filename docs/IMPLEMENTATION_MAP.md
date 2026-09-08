@@ -1,4 +1,4 @@
-# Implementation Map — RepurposeAI (agentic-v4)
+# Implementation Map — VervAI (agentic-v4)
 
 Phase 0 repository audit. Ground truth for Phase 1 (canonical source architecture).
 Companion to `docs/agentic-v2-audit.md` (the as-found baseline) and
@@ -544,3 +544,61 @@ single source of truth instead of duplicated lists.
 Next step (Phase 6): opportunity→output recommendations — map the intelligence
 engine's derived opportunities to registry outputs with a "Let the Agent decide"
 path.
+
+## Phase 6 — Recommendation engine + brand (delivered)
+
+Deterministic opportunity→output recommendations that reuse — never fork — the
+authoritative Output Registry and the intelligence engine.
+
+- **`lib/recommendations/`** — `objective-fit.ts` (objective → fit per output),
+  `opportunity-mapping.ts` (derived opportunities → candidate outputs),
+  `scoring.ts` (evidence + objective fit + opportunity boost → confidence →
+  score → label), `recommend.ts` (evidence gate → fit → boost → score → label),
+  `types.ts` (Objective, ObjectiveFit, RecommendationContext,
+  EnrichedRecommendation). Pure + deterministic; no LLM.
+- **Output Registry stays authoritative.** Recommend reads `outputRegistry`
+  definitions; `lib/recommendations/index.ts` is the public API.
+- **Dashboard surfaces** — `ObjectivePrompt` ("Create with VervAI" →
+  `/agent?goal=`), `OpportunityNext` (→ `/agent?source=`), `AtAGlance`,
+  a recommendations row; `app/api/recommendations/route.ts` serves the flow.
+- **VervAI brand migration** — `lib/brand.ts` (`BRAND` constant),
+  `app/layout.tsx` metadata title/description, `docs/VERVAI_BRAND_MIGRATION.md`
+  audit table, user-facing legacy strings replaced (output-editor, openrouter
+  X-Title, README/doc H1s), and `npm run brand-check` regression
+  (`scripts/brand-check.mjs`, exit 1 on any unexpected legacy user-facing
+  branding). Compat identifiers (package name, Vercel project/URLs, contacts)
+  are preserved per brand rules.
+- **Tests**: `lib/recommendations/recommend.test.ts`. 393→420 tests, `tsc`
+  clean, build green.
+
+Next step (Phase 7): wrap the recommendation flow in a reviewable
+plan/approval/execution coordination layer.
+
+## Phase 7 — Orchestrator v1 (coordination layer, delivered)
+
+Pure, tested policy package `lib/agent/orchestrator/` that coordinates (never
+reimplements) the existing subsystems.
+
+- **`types.ts`** — orchestration domain: modes, objective, context, plan,
+  approval, execution, run statuses, tool-risk and error taxonomy.
+- **`state-machine.ts`** — `canTransition` / `transitionPath` / `canPause` /
+  `canCancel`; terminal states immutable; `awaiting_approval → executing` only
+  via `approved`.
+- **`context.ts`** — `buildContext` / `resolveContext`: server-resolved
+  ownership, refuses unowned references.
+- **`planner.ts`** — `buildPlan` (recommendations → dependency-ordered
+  generate+review steps, capped, approval-aware), `newPlanVersion` (immutable
+  approved plans).
+- **`approvals.ts`** — version-bound `decide` / `isApprovalValidFor` /
+  `isExecutable`; rejection also version-bound.
+- **`executor.ts`** — deterministic `nextStep` tick + `markStepDone/Failed/
+  Running`, `allStepsDone` for the durable worker.
+- **`retry.ts` / `idempotency.ts` / `policies.ts` / `errors.ts` / `events.ts`**
+  — transparent-permanent backoff budget (reuses `isTransientError`), stable
+  dedupe keys, tool-risk→autonomy mapping (consequential NEVER autonomous),
+  code→user-safe errors, status→label + analytics events.
+- **Docs + skill** — `docs/VERVAI_ORCHESTRATOR_ARCHITECTURE.md`,
+  `docs/VERVAI_ORCHESTRATOR_RUNBOOK.md`, `skills/vervai-orchestrator/SKILL.md`.
+- **Tests**: `lib/agent/orchestrator/orchestrator.test.ts` (27 tests). Total
+  420 tests / 41 files, `tsc` clean, build green, `npm run brand-check` exit 0.
+  Backed by suggested flag `VERVAI_ORCHESTRATOR_V1`.

@@ -42,10 +42,10 @@ export default function ScalePanel() {
         const body = (await res.json()) as ScaleData;
         if (body.ok) setData(body);
       } else {
-        setError("Could not load the scale overview.");
+        setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
     } catch {
-      setError("Could not load the scale overview.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,7 @@ export default function ScalePanel() {
         description={
           data
             ? `${data.planName} plan · default: ${AGENT_MODE_LABEL[data.defaultMode as keyof typeof AGENT_MODE_LABEL] ?? data.defaultMode}`
-            : "Permission model overview."
+            : "VervAI permission model overview."
         }
       />
 

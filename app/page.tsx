@@ -105,7 +105,7 @@ const TESTIMONIALS = [
     role: "Solo founder, weekly podcast"
   },
   {
-    quote: "I don't want to sound like a generic content machine. RepurposeAI keeps my voice and gives me something I'd actually publish.",
+    quote: "I don't want to sound like a generic content machine. VervAI keeps my voice and gives me something I'd actually publish.",
     name: "Priya R.",
     role: "LinkedIn creator, 12k followers"
   },
@@ -174,7 +174,7 @@ const FAQS = [
   },
   {
     q: "Is it really free?",
-    a: "Yes. While RepurposeAI is in beta, every account gets the Beta plan: 5 repurpose jobs a month, every output format, and all the drafting tools — at no cost. No credit card required."
+    a: "Yes. While VervAI is in beta, every account gets the Beta plan: 5 creation jobs a month, every output format, and all the drafting tools — at no cost. No credit card required."
   },
   {
     q: "What counts as a repurpose job?",
@@ -382,7 +382,7 @@ export default function Home() {
           <SectionHeading
             kicker="Who it's for"
             title="Built for creators who publish more than they record"
-            body="If a one-hour conversation can feed a whole week of publishing, RepurposeAI does the writing so you don't have to."
+            body="If a one-hour conversation can feed a whole week of publishing, VervAI does the writing so you don't have to."
           />
 
           <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -504,7 +504,7 @@ export default function Home() {
           <SectionHeading
             kicker="Pricing"
             title="Free during beta"
-            body="We're validating RepurposeAI in the open — you get real, working limits while we do, all on us."
+            body="We're validating VervAI in the open — you get real, working limits while we do, all on us."
           />
 
           <div className="mt-12 grid gap-6 md:grid-cols-4">

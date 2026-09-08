@@ -13,10 +13,10 @@ export default function ContentCalendarPage() {
     <div className="workspace py-8 lg:py-10">
       <PageHeader
         title="Content calendar"
-        description="A weekly view of what you plan to publish — once a publishing channel is connected."
+        description="See what you plan to publish — once a publishing channel is connected."
       />
       <Card>
-        <CardHeader title="Calendar" description="Planned for a connected publishing channel." />
+        <CardHeader title="Calendar" description="Planned for a connected publishing channel — drafts approved by the agent appear here once publishing is wired in." />
         <EmptyState
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-5" aria-hidden="true">
@@ -25,7 +25,7 @@ export default function ContentCalendarPage() {
             </svg>
           }
           title="Coming soon"
-          description="Start an agent run, approve the angles, and those drafts will appear here once publishing is wired in."
+          description="Connect a publishing channel when you're ready to distribute your work."
         />
       </Card>
     </div>

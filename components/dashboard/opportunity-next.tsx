@@ -62,7 +62,7 @@ export default function OpportunityNext() {
         description={
           refreshing
             ? "Refreshing…"
-            : "The agent&apos;s top recommendation from your real content."
+            : "VervAI's top recommendation from your real content."
         }
         action={
           <button
@@ -127,12 +127,12 @@ export default function OpportunityNext() {
         ) : (
           <div className="px-5 py-5">
             <p className="text-sm text-theme-text-secondary">
-              No recommendation yet — once a source has a ready transcript, the agent suggests what to
+              VervAI hasn't found strong opportunities yet — once a source has a ready transcript, VervAI will suggest what to
               make next.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href="/upload" className="btn btn-outline-primary btn-sm">
-                Repurpose content
+                Create content
               </Link>
               <Link href="/agent" className="btn btn-outline-primary btn-sm">
                 Open the agent

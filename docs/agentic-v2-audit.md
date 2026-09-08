@@ -1,4 +1,4 @@
-# Agentic RepurposeAI V2 — Phase 0 Repository Audit
+# Agentic VervAI V2 — Phase 0 Repository Audit
 
 Audit date: 2026-09-07. Repository: `W:\repupose-ai-v4`, git `725ce89 first commit` (clean tree).
 Scope: current state before the V2 master implementation (phases P0–P14). This document is the

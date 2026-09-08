@@ -98,7 +98,7 @@ export default function Timeline({
     <Card>
       <CardHeader
         title="Progress"
-        description="Your run in plain language — the detail behind each line is below."
+        description="Your VervAI run in plain language — the detail behind each line is below."
       />
       <ol className="px-5 py-4">
         {lines.map((line, i) => (
@@ -109,7 +109,7 @@ export default function Timeline({
       {steps.length > 0 && (
         <details className="group border-t border-theme-divider px-5 py-3">
           <summary className="cursor-pointer list-none text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary">
-            <span className="underline">View agent activity</span> — {steps.length} durable step
+            <span className="underline">View VervAI activity</span> — {steps.length} durable step
             {steps.length === 1 ? "" : "s"}
           </summary>
           <ol className="mt-3 space-y-0">

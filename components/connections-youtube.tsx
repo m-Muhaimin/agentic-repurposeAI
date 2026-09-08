@@ -72,7 +72,7 @@ export default function ConnectionsYoutube({
             {connectedDate ? ` · Connected ${connectedDate}` : ""}
           </p>
           <p className="mt-3 text-sm text-theme-text-secondary">
-            Repurpose videos straight from their authorized captions — no download or transcription
+            Turn your authorized YouTube captions into drafts — no download or transcription
             step.
           </p>
           {error && (
@@ -96,9 +96,9 @@ export default function ConnectionsYoutube({
         </div>
       ) : (
         <div className="mt-4 flex flex-1 flex-col">
-          <p className="text-sm text-theme-text-secondary">
+          <p className="text-xs text-theme-text-secondary">
             Connect your YouTube channel to import videos and access authorized captions for
-            repurposing.
+            turning them into drafts.
           </p>
           <a href="/api/integrations/youtube/connect" className="btn btn-primary mt-6 self-start">
             Connect YouTube

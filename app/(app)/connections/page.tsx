@@ -55,7 +55,7 @@ export default async function ConnectionsPage({
         <PageHeader
           className="mb-8"
           title="Connections"
-          description="Connect the platforms where your content lives so RepurposeAI can work with it directly."
+          description="Connect the platforms where your content lives so VervAI can work with it directly."
         />
 
         {bufferNotice && (

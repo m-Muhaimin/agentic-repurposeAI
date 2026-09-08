@@ -69,10 +69,10 @@ export default function ObservePanel() {
         const body = (await res.json()) as ObserveData;
         if (body.ok) setData(body);
       } else {
-        setError("Could not load insights.");
+        setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
     } catch {
-      setError("Could not load insights.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,7 +87,7 @@ export default function ObservePanel() {
     <Card>
       <CardHeader
         title="Observe"
-        description={refreshing ? "Refreshing…" : "Real run, step and spend data from your agent workspace."}
+        description={refreshing ? "Refreshing…" : "Real run, step and spend data from your VervAI workspace."}
         action={
           <button
             type="button"
@@ -118,7 +118,7 @@ export default function ObservePanel() {
             </svg>
           }
           title="No data yet"
-          description="Run your first agent run to start the funnel. Engagement analytics unlock once a publishing channel is connected."
+          description="Run your first VervAI run to start the funnel. Engagement analytics unlock once a publishing channel is connected."
         />
       )}
 
@@ -172,7 +172,7 @@ export default function ObservePanel() {
             <p className="text-xs font-medium text-theme-text-secondary">Engagement &amp; performance</p>
             {!data.engagementAvailable ? (
               <p className="mt-2 rounded-lg border border-dashed border-theme-divider px-4 py-4 text-center text-xs text-theme-text-secondary">
-                No data yet — connect a publishing channel to unlock engagement analytics.
+                Connect a publishing channel when you're ready to distribute your work.
                 <br />
                 <span className="italic">No channel is connected in this build, so no performance numbers are shown.</span>
               </p>

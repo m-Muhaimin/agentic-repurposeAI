@@ -107,8 +107,8 @@ export default async function AgentPage({
   return (
       <div className="workspace py-8 lg:py-10">
         <PageHeader
-          title="Agent"
-          description="Your content operator: say what you want, review its plan, and it drafts the pieces — while anything famous stays under your control."
+          title="VervAI"
+          description="Your strategic creation workspace: say what you want, review VervAI's plan, and it drafts the pieces — while anything you create stays under your control."
         />
         <AgentWorkspace
           initialSources={readySources.map((s) => ({

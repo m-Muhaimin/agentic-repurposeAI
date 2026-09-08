@@ -356,10 +356,10 @@ export default function SourceList({
               </svg>
             }
             title="No content yet"
-            description="Repurpose a recording, transcript, or YouTube video and your drafts will live here."
+            description="Your VervAI workspace starts here. Add a piece of content and tell VervAI what you're trying to accomplish."
             action={
               <Link href="/upload" className="btn btn-primary mt-2">
-                Repurpose content
+                Create content
               </Link>
             }
           />

@@ -112,7 +112,7 @@ export default function RunDetail({
       }
       await refresh();
     } catch {
-      setError("Failed to reach the worker.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setBusy(false);
     }
@@ -129,7 +129,7 @@ export default function RunDetail({
       });
       const body = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !body.ok) {
-        setError(body.error ?? "Approval failed.");
+        setError(body.error ?? "VervAI couldn't complete this action. Your content is safe. [Try again]");
         return;
       }
       await kick();
@@ -149,7 +149,7 @@ export default function RunDetail({
       });
       const body = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !body.ok) {
-        setError(body.error ?? "Rejection failed.");
+        setError(body.error ?? "VervAI couldn't complete this action. Your content is safe. [Try again]");
         return;
       }
       await refresh();
@@ -274,7 +274,7 @@ export default function RunDetail({
 
           {outputs.length > 0 && (
             <Card>
-              <CardHeader title="Generated drafts" description="Written to your content library — open them in the editor to refine." />
+              <CardHeader title="Generated drafts" description="Written to your content library — open them in the editor to refine your VervAI drafts." />
               <ul className="divide-y divide-theme-divider">
                 {outputs.map((o) => (
                   <li key={o.id} className="px-5 py-4">
@@ -291,11 +291,11 @@ export default function RunDetail({
             </Card>
           )}
 
-          {/* ── P7: Edit-learning readout (what the agent remembers) ──── */}
+          {/* ── P7: Edit-learning readout (what VervAI remembers) ──── */}
           {signals.length > 0 && (
             <Card>
               <CardHeader
-                title="What the agent remembers"
+                title="What VervAI remembers"
                 description="Recent signals from your edits and angle decisions."
               />
               <ul className="divide-y divide-theme-divider">

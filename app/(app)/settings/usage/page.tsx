@@ -113,7 +113,7 @@ export default async function UsagePage() {
               ))}
             </ul>
             <p className="mt-4 text-xs text-theme-text-secondary">
-              Repurpose jobs are budgeted per calendar month and reset automatically.
+              Creation jobs are budgeted per calendar month and reset automatically.
             </p>
           </Card>
         </div>
@@ -122,11 +122,11 @@ export default async function UsagePage() {
         <Card className="mt-4">
           <CardHeader
             title="Recent usage"
-            description="Your most recent repurpose jobs this cycle."
+            description="Your most recent creation jobs this cycle."
           />
           {recentJobs.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-theme-text-secondary">
-              No jobs yet this cycle — repurpose your first piece of content.
+              No jobs yet this cycle — create your first piece of content.
             </p>
           ) : (
             <ul className="divide-y divide-theme-divider">

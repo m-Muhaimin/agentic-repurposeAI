@@ -55,7 +55,7 @@ export async function fetchUrl(url: string, opts: HttpOptions = {}): Promise<Fet
       headers: {
         accept:
           "text/html,application/xhtml+xml,application/rss+xml,application/atom+xml,text/xml;q=0.9,*/*;q=0.8",
-        "user-agent": "RepurposeAI-ingestion/1.0"
+        "user-agent": "VervAI-ingestion/1.0"
       }
     });
   } catch (err) {

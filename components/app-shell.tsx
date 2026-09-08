@@ -43,7 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Create",
     items: [
       {
-        label: "Agent",
+        label: "Draft with VervAI",
         href: "/agent",
         icon: (
           <svg
@@ -64,7 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
         )
       },
       {
-        label: "New content",
+        label: "Create content",
         href: "/upload",
         icon: (
           <svg
@@ -438,7 +438,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile top bar */}
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-theme-divider bg-theme-bg-paper px-4 py-3 lg:hidden">
-          <span className="text-lg font-bold text-theme-text-primary">Repurpose</span>
+          <span className="text-lg font-bold text-theme-text-primary">VervAI</span>
           <div className="flex items-center gap-2">
             <CreateMenu variant="topbar" />
             <button

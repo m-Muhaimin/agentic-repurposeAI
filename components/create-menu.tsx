@@ -12,7 +12,7 @@ import { clsx } from "clsx";
 const ACTIONS = [
   {
     href: "/upload",
-    title: "Repurpose a recording",
+    title: "Create from content",
     body: "Create drafts from a new upload, transcript, or YouTube link.",
     icon: (
       <path d="M12 5v14M5 12h14" />
@@ -20,7 +20,7 @@ const ACTIONS = [
   },
   {
     href: "/agent",
-    title: "Draft with the agent",
+    title: "Draft with VervAI",
     body: "Describe a goal — it plans, you approve, then it drafts.",
     icon: (
       <>

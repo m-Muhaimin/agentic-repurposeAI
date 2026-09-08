@@ -70,7 +70,7 @@ export default function AgentWorkspace({
     const body = (await res.json()) as { ok?: boolean; run?: { id: string }; error?: string };
 
     if (!res.ok || !body.ok || !body.run) {
-      setError(body.error ?? "Failed to start the run.");
+      setError(body.error ?? "VervAI couldn't start this run. Your content is safe. [Try again]");
       setBusy(false);
       return;
     }
@@ -94,7 +94,7 @@ export default function AgentWorkspace({
       });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
-        setError(body.error ?? "Worker error.");
+        setError(body.error ?? "VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
       // The durable state is re-read by RunDetail on the next poll — the SSE
       // is just a live progress stream for the current session.
@@ -147,7 +147,7 @@ export default function AgentWorkspace({
               </svg>
             }
             title="No run loaded"
-            description="Start an agent run, or pick one from history — its plan, progress and drafts appear here."
+            description="Start a VervAI run, or pick one from history — its plan, progress and drafts appear here."
           />
         )}
       </div>

@@ -61,7 +61,7 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
         setAnalyzeStatus({
           ok: false,
           needsContent: true,
-          text: "Not enough drafts yet to model your voice on — repurpose something first, then come back."
+          text: "Not enough drafts yet to model your voice on — create something first, then come back."
         });
         return;
       }
@@ -157,7 +157,7 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
     <div className="workspace py-8 lg:py-10">
       <PageHeader
         title="Brand &amp; Voice"
-        description="Teach RepurposeAI how you sound. Your voice and content preferences are applied whenever you create a draft."
+        description="Teach VervAI how you sound. Your voice and content preferences are applied whenever you create a draft."
       />
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -217,8 +217,8 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
                 <>
                   {" "}
                   <Link href="/upload" className="underline underline-offset-2 hover:text-primary-700">
-                    Repurpose something
-                  </Link>
+                          Create something
+                        </Link>
                 </>
               )}
             </p>
@@ -239,7 +239,7 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
       <div className="lg:col-span-2">
         <h2 className="font-display text-base font-semibold">Output preferences</h2>
         <p className="mt-0.5 text-xs text-theme-text-secondary">
-          Fine-tune how RepurposeAI writes each type of content. Leave a field blank to follow its
+          Fine-tune how VervAI writes each type of content. Leave a field blank to follow its
           built-in default.
         </p>
       </div>

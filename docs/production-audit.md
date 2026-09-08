@@ -1,4 +1,4 @@
-# Production Readiness Audit — RepurposeAI
+# Production Readiness Audit — VervAI
 
 Phase 0 deliverable of the business-ready production program. State captured against
 `main` at `9d02792` (plus 5 uncommitted settings-layout files). Every claim below was

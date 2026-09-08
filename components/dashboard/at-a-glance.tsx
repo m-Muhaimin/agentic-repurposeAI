@@ -143,8 +143,8 @@ export default function AtAGlance() {
 
       <Card>
         <CardHeader
-          title="Needs attention"
-          description="Things that are waiting on you — the top of the queue."
+          title="Ready for your review"
+          description="Your content pipeline — drafts approved by VervAI, failed runs, and saved footage still waiting to be turned into drafts."
           action={
             <Link href="/library" className="caption text-primary-500 transition-colors hover:text-primary-700">
               Open library →
@@ -154,7 +154,7 @@ export default function AtAGlance() {
         {!hasAttention ? (
           <div className="px-5 py-6">
             <p className="text-sm text-theme-text-secondary">
-              Nothing needs your attention — you&apos;re all caught up.
+              Nothing on your radar — you&apos;re all caught up with VervAI.
             </p>
           </div>
         ) : (
@@ -176,7 +176,7 @@ export default function AtAGlance() {
               <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{s.title}</p>
-                  <p className="truncate text-xs text-red-600">{s.error_message ?? "Processing failed."}</p>
+                  <p className="truncate text-xs text-red-600">{s.error_message ?? "VervAI couldn't finish it."}</p>
                 </div>
                 <button
                   type="button"
@@ -185,34 +185,36 @@ export default function AtAGlance() {
                   className="btn btn-outline-primary btn-sm shrink-0 disabled:opacity-50"
                 >
                   {busyId === s.id ? "Retrying…" : "Try again"}
-                </button>
-              </li>
-            ))}
-            {staged.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-                <div className="min-w-0">
+                  </button>
+                  </li>
+                  ))}
+                  {staged.map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                  <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{s.title}</p>
-                  <p className="text-xs text-theme-text-secondary">Saved — processing never started.</p>
-                </div>
-                <button
+                  <p className="text-xs text-theme-text-secondary">Save a recording — VervAI hasn't started it yet.</p>
+                  </div>
+                  <button
                   type="button"
                   onClick={() => startProcessing(s.id)}
                   disabled={busyId !== null}
                   className="btn btn-outline-primary btn-sm shrink-0 disabled:opacity-50"
-                >
-                  {busyId === s.id ? "Starting…" : "Start processing"}
-                </button>
-              </li>
-            ))}
+                  >
+                  {busyId === s.id ? "Starting…" : "Start with VervAI"}
+                  </button>
+                  </li>
+                  ))}
           </ul>
         )}
       </Card>
 
       <Card>
-        <CardHeader title="In progress" description="Sources and agent runs still working." />
+        <CardHeader title="In progress" description="Sources and VervAI runs still working — drafts being generated and processed." />
         {pending.length + inFlightRuns.length === 0 ? (
           <div className="px-5 py-6">
-            <p className="text-sm text-theme-text-secondary">Nothing is processing right now.</p>
+            <p className="text-sm text-theme-text-secondary">
+              Nothing’s processing right now — your VervAI pipeline is idle.
+            </p>
           </div>
         ) : (
           <ul className="divide-y divide-theme-divider">

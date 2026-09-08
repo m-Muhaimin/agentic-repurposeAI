@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BRAND } from "@/lib/brand";
 import { Archivo, Figtree } from "next/font/google";
 import "./globals.css";
 
@@ -15,8 +16,8 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Repurpose AI — one recording, three posts",
-  description: "Turn a podcast or YouTube video into a LinkedIn post, newsletter draft, and short-form script."
+  title: "VervAI — Turn your content into your next best content",
+  description: BRAND.description,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -221,7 +221,7 @@ export default function OutputEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-theme-divider px-6 py-4">
         <p className="text-sm text-theme-text-secondary">
-          {mode === "edit" ? `${wordCount} words` : "Generated from your recording with Repurpose AI"}
+          {mode === "edit" ? `${wordCount} words` : "Generated from your recording with VervAI"}
         </p>
         {mode === "edit" ? (
           <div className="flex items-center gap-3">

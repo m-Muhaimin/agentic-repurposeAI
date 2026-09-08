@@ -91,7 +91,7 @@ export default function OutcomeComposer({
     <Card>
       <CardHeader
         title="What are you trying to accomplish?"
-        description="Start with the outcome — not the source. The agent plans, you approve, it drafts."
+        description="Start with the outcome — not the source. VervAI plans, you approve, it drafts."
       />
 
       <div className="space-y-4 px-5 py-4">
@@ -232,12 +232,12 @@ export default function OutcomeComposer({
               ? "No ready source yet"
               : busy
                 ? "Starting…"
-                : "Start agent run"}
+                : "Start VervAI run"}
         </button>
 
         {noReadySources && startsRun && (
-          <p className="text-xs text-theme-text-secondary">
-            The agent plans from a transcript. Upload a source to get one{" "}
+          <p className="mt-2 text-xs text-theme-text-secondary">
+            VervAI plans from a transcript. Upload a source to get one{" "}
             <Link href="/upload" className="text-primary-500 hover:text-primary-700">
               here
             </Link>

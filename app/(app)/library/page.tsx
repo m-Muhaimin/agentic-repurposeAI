@@ -34,10 +34,10 @@ export default async function LibraryPage() {
   return (
       <div className="workspace py-8 lg:py-10">
         <PageHeader
-          title="Content Library"
+          title="Content library"
           description={
             <>
-              Everything you&apos;ve repurposed — sources, their drafts, and processing status — in
+              Everything you&apos;ve created — sources, their drafts, and processing status — in
               one place.{" "}
               <Link href="/settings/usage" className="caption text-primary-500 transition-colors hover:text-primary-700">
                 {betaNote} →
@@ -58,7 +58,7 @@ export default async function LibraryPage() {
                 >
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                Repurpose content
+                Create content
               </span>
             </Link>
           }

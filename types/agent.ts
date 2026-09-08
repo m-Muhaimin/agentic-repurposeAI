@@ -1,4 +1,4 @@
-// Domain types for the Agentic RepurposeAI loop. These are the source of truth
+// Domain types for the Agentic VervAI loop. These are the source of truth
 // for the stage machines (planning → approval → execution → evaluation), the
 // tool registry, and the durable V4_* tables. Pure type module — no imports —
 // so both server code and client components can read them.

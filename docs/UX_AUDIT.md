@@ -1,4 +1,4 @@
-# UX Audit — RepurposeAI (Phase 0)
+# UX Audit — VervAI (Phase 0)
 
 - **Scope**: UX audit only. No application code was changed. All findings are derived from reading current code.
 - **Method**: Route inventory from `middleware.ts` + `app/` tree; per-page read of every authenticated route and the shared shell; inventory of shared primitives; gap-log against the Phase 1 (Global Shell) target IA.

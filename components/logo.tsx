@@ -1,11 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
 export function BrandMark({ className = "size-9" }: { className?: string }) {
   return (
     <Image
       src="/icon.png"
-      alt="Repurpose AI"
+      alt="VervAI"
       width={512}
       height={512}
       className={`shrink-0 rounded-xl ${className}`}
@@ -19,7 +20,7 @@ export default function Logo({ href = "/" }: { href?: string }) {
     <Link href={href} className="flex items-center gap-2.5">
       <BrandMark />
       <span className="font-display text-xl font-bold tracking-tight text-theme-text-primary">
-        Repurpose
+        {BRAND.name}
       </span>
     </Link>
   );

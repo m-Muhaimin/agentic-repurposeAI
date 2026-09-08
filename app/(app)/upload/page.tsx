@@ -64,7 +64,7 @@ export default function UploadPage() {
   useEffect(() => {
     const outcome = new URLSearchParams(window.location.search).get("youtube");
     if (outcome === "connected") {
-      setNotice("YouTube connected — repurpose your videos straight from their captions.");
+      setNotice("YouTube connected — turn your own videos into drafts straight from their captions.");
     } else if (outcome === "denied") {
       setNotice("YouTube connection cancelled — your URL-paste flow still works.");
     } else if (outcome === "error" || outcome === "config") {
@@ -95,9 +95,9 @@ export default function UploadPage() {
       // The source row already exists — the dashboard's "Start processing"
       // button can pick it up, so don't navigate with a half-started flow.
       const fallback =
-        data?.error ?? "Processing couldn't be started (this can happen when rate-limited).";
+        data?.error ?? "Creating couldn't be started (this can happen when rate-limited).";
       throw new Error(
-        `${fallback} Your content is saved — open your Content Library and press Start processing.`
+        `${fallback} Your content is saved — open your library and press Start creating.`
       );
     }
     return data.jobId;
@@ -387,10 +387,10 @@ export default function UploadPage() {
                 Ask the agent what to create from it
               </Link>
               <Link
-                href={`/repurpose/${receivedSource.id}`}
+                href={`/agent?source=${receivedSource.id}`}
                 className="btn btn-outline-primary w-full"
               >
-                Choose outputs myself
+                Choose outputs myself — ask VervAI
               </Link>
               <Link href="/library" className="btn w-full">
                 Add to library and keep browsing
@@ -404,8 +404,8 @@ export default function UploadPage() {
           <div className="rounded-lg border border-theme-divider bg-theme-bg-paper p-6 sm:p-8">
             <PageHeader
             title="Create content from your next recording"
-            description="Upload audio or video, add a transcript, or connect a YouTube video. RepurposeAI will turn it into ready-to-edit drafts."
-          />
+            description="Upload audio or video, add a transcript, or connect a YouTube video. VervAI will turn it into ready-to-edit drafts."
+            />
 
             <SegmentedControl
               ariaLabel="Choose how to bring in your content"
@@ -569,7 +569,7 @@ export default function UploadPage() {
                     ) : (
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs text-theme-text-secondary">
-                          Connect your YouTube channel to repurpose your own videos straight
+                          Connect your YouTube channel to turn your own videos into drafts straight
                           from their captions — no audio download or transcription step.
                         </p>
                         <a href="/api/integrations/youtube/connect" className="btn btn-sm btn-primary shrink-0">

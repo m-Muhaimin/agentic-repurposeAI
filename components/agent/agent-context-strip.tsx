@@ -37,7 +37,7 @@ export default function AgentContextStrip({ context }: { context: AgentContextDa
   return (
     <Card>
       <CardHeader
-        title="What your agent knows"
+        title="What VervAI knows"
         description="Context it works from — every figure is read from your account."
       />
       <dl className="divide-y divide-theme-divider text-xs">

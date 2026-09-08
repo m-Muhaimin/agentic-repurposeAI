@@ -16,7 +16,7 @@ const MAX_SAMPLES = 6;
 const SAMPLE_CHARS = 2600;
 const MAX_RESULT_CHARS = 2400;
 
-const SYSTEM_INSTRUCTION = `You are RepurposeAI's voice assistant. From the user's existing drafts, write ONE reusable brand-voice description they can paste into their settings.
+const SYSTEM_INSTRUCTION = `You are VervAI's voice assistant. From the user's existing drafts, write ONE reusable brand-voice description they can paste into their settings.
 
 Output ONLY the voice description as clean prose, 80-160 words. Capture their tone, personality, grammar tics, how they refer to themselves, and words they would avoid. Be concrete and specific to the provided samples.
 

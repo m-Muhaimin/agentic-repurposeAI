@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 import Logo from "./logo";
 import WaitlistForm from "./waitlist-form";
@@ -16,7 +17,7 @@ const COLUMNS = [
     links: [
       { label: "Overview", href: "/dashboard" },
       { label: "Content Library", href: "/library" },
-      { label: "Repurpose content", href: "/upload" },
+      { label: "Create content", href: "/upload" },
       { label: "Log in", href: "/login" }
     ]
   },
@@ -42,8 +43,8 @@ export default function Footer() {
         <div className="max-w-sm">
           <Logo />
           <p className="mt-4 text-sm leading-normal text-theme-text-secondary">
-            One recording, three posts. Turn a podcast or video into a LinkedIn post, newsletter
-            section, and short-form script.
+            {BRAND.tagline} Turn your recordings into a LinkedIn post, newsletter
+            section, and short-form script — all ready to edit.
           </p>
           <p className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary-100 px-3 py-1 text-[12px] font-semibold text-primary-500">
             <svg
@@ -58,7 +59,7 @@ export default function Footer() {
             >
               <path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 1 1.3-1.3L12 3z" />
             </svg>
-            Free during beta
+            Free during beta — your first 5 VervAI jobs are on us
           </p>
 
           <div className="mt-6">
@@ -89,7 +90,7 @@ export default function Footer() {
 
       <div className="border-t border-theme-divider">
         <div className="container flex flex-col items-center justify-between gap-4 py-5 text-sm text-theme-text-secondary sm:flex-row">
-          <p>© 2026 Repurpose AI</p>
+          <p>© 2026 VervAI</p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <span
               aria-label="Trust badges"

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader } from "@/components/card";
 
 // The dashboard's dominant "next action": an objective prompt that hands the
-// outcome to the agent. Everything it offers is a REAL route — Create prefills
+//  outcome to VervAI. Everything it offers is a REAL route — Create prefills
 // /agent?goal=… (the composer picks it up), and the quick tiles mirror the
 // shell's own navigation verbs so nothing here is a fake control.
 
@@ -18,7 +18,7 @@ const EXAMPLES = [
 
 const QUICK_ACTIONS = [
   { href: "/agent", title: "Draft with the agent", detail: "An outcome in, drafts out — you approve the angles." },
-  { href: "/upload", title: "Repurpose a recording", detail: "Upload media, a transcript, or a link to repurpose." },
+  { href: "/upload", title: "Create content", detail: "Upload media, a transcript, or a link — VervAI turns it into ready-to-edit drafts." },
   { href: "/library", title: "See your library", detail: "Sources, their drafts, and processing status." }
 ];
 
@@ -34,7 +34,7 @@ export default function ObjectivePrompt() {
     <Card>
       <CardHeader
         title="What should we make this week?"
-        description="Tell the agent the outcome you want. It plans angles from your real content, you approve them, and it drafts."
+        description="Tell VervAI the outcome you want — it plans angles from your real content, you approve them, and it drafts."
       />
       <div className="px-5 py-4">
         <textarea
@@ -65,10 +65,10 @@ export default function ObjectivePrompt() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={start} className="btn btn-primary">
-            Create with the agent
+            Create with VervAI
           </button>
           <Link href="/agent" className="btn btn-outline-primary">
-            Open the agent
+            Open VervAI
           </Link>
         </div>
 

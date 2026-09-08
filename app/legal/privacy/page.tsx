@@ -3,7 +3,7 @@ import LegalDoc, { LegalHeading } from "@/components/legal-doc";
 const CONTACT = "hello@muhaimin.dev";
 
 export const metadata = {
-  title: "Privacy Policy — Repurpose AI"
+  title: "Privacy Policy — VervAI"
 };
 
 export default function PrivacyPage() {
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           If you connect a YouTube account, we additionally store a connection record: your channel
           id and name, and encrypted session tokens that let us read your own videos&apos; titles and
           captions on your behalf. The tokens are stored encrypted with a key held only by us, and
-          you can revoke the connection at any time from the upload page (which also deletes the
+          you can revoke the connection at any time from the VervAI upload page (which also deletes the
           stored tokens).
         </p>
       </section>

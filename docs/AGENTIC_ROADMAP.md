@@ -1,4 +1,4 @@
-# Agentic RepurposeAI — Roadmap
+# Agentic VervAI — Roadmap
 
 Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not code).
 
@@ -271,3 +271,28 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 > **32/32**, **139** unit tests (15 files). Publishing remains human-gated:
 > no provider is connected, nothing auto-sends, and the UI truthfully shows the
 > "not connected" state everywhere a publish affordance exists.
+
+> **Phase 6 (recommendation engine + brand) closed.** Deterministic
+> opportunity→output recommendations: `lib/recommendations/` (objective-fit,
+> opportunity-mapping, scoring, recommend) reuses the authoritative Output
+> Registry and the intelligence engine — it never forks them. The dashboard
+> surfaces (`ObjectivePrompt` → `/agent?goal=`, `OpportunityNext` →
+> `/agent?source=`, `AtAGlance`, `RecommendationsRow`) and `POST
+> /api/recommendations` wire the flow. VervAI brand migration shipped:
+> `lib/brand.ts` (canonical `BRAND`), `app/layout.tsx` metadata, `docs/
+> VERVAI_BRAND_MIGRATION.md` audit, and a regression `npm run brand-check`
+> (`scripts/brand-check.mjs`) that exits non-zero on any unexpected legacy
+> user-facing branding; remaining legacy strings are only compat identifiers
+> (package name, Vercel project/URLs, contacts) that brand rules deliberately
+> preserve.
+
+> **Phase 7 (Orchestrator v1 — coordination layer) closed.** A pure, tested
+> policy package `lib/agent/orchestrator/` (O1 lifecycle/state machine, O2
+> context, O3 planner, O4 approvals, O5 executor/retry/idempotency/policies,
+> O6 errors/events/docs) sits ON TOP of the existing durable runtime and
+> subsystems — it reimplements nothing. Publishing stays human-gated; plans are
+> immutable once approved; all consequential actions require approval. Docs:
+> `docs/VERVAI_ORCHESTRATOR_ARCHITECTURE.md`, `docs/VERVAI_ORCHESTRATOR_RUNBOOK.md`,
+> `skills/vervai-orchestrator/SKILL.md`. Suggested flag `VERVAI_ORCHESTRATOR_V1`
+> to ship behind. Green: `tsc --noEmit`, `npm run build`, `npm run brand-check`
+> (exit 0), **420** unit tests (41 files).

@@ -31,8 +31,8 @@ function UsageStrip({
           </div>
           <p className="mt-1 text-xs text-theme-text-secondary">
             {usage.jobsLimit === null
-              ? `${usage.jobsUsed} repurpose jobs used so far`
-              : `${usage.jobsUsed} of ${usage.jobsLimit} repurpose jobs used${
+              ? `${usage.jobsUsed} creation jobs used so far`
+              : `${usage.jobsUsed} of ${usage.jobsLimit} creation jobs used${
                   usage.jobsRemaining ? ` · ${usage.jobsRemaining} left` : ""
                 }`}
           </p>
@@ -216,7 +216,7 @@ export default async function OverviewPage() {
             {allSources.length === 0 ? (
               <div className="px-5 py-10">
                 <p className="text-sm text-theme-text-secondary">
-                  Nothing here yet — repurpose your first piece of content and it will show up here.
+                  Nothing here yet — create your first piece of content and it will show up here.
                 </p>
               </div>
             ) : (

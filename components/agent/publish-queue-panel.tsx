@@ -78,10 +78,10 @@ export default function PublishQueuePanel() {
         const body = (await res.json()) as QueueData;
         if (body.ok) setData(body);
       } else {
-        setError("Could not load the publish queue.");
+        setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
     } catch {
-      setError("Could not load the publish queue.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setLoading(false);
     }
@@ -104,13 +104,13 @@ export default function PublishQueuePanel() {
       });
       const body = (await res.json()) as { ok?: boolean; error?: string; publishBlockedMessage?: string };
       if (!res.ok || !body.ok) {
-        setError(body.error ?? "Could not queue the draft.");
+        setError(body.error ?? "VervAI couldn't publish this post. Your draft is still available. [Review draft] [Try again]");
         return;
       }
       setSuccess("Draft queued for approval.");
       await fetchQueue();
     } catch {
-      setError("Could not queue the draft.");
+      setError("VervAI couldn't publish this post. Your draft is still available. [Review draft] [Try again]");
     } finally {
       setConfirmingId(null);
     }
@@ -137,10 +137,10 @@ export default function PublishQueuePanel() {
         if (first) setJobProfile((s) => ({ ...s, [jobId]: first.id }));
         setError(null);
       } else {
-        setError(body.error ?? "Could not load Buffer profiles.");
+        setError(body.error ?? "VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
     } catch {
-      setError("Could not load Buffer profiles.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     }
   }
 
@@ -177,13 +177,13 @@ export default function PublishQueuePanel() {
       });
       const body = (await res.json()) as { ok?: boolean; error?: string; scheduled?: boolean };
       if (!res.ok || !body.ok) {
-        setError(body.error ?? "Could not send the draft.");
+        setError(body.error ?? "VervAI couldn't publish this post. Your draft is still available. [Review draft] [Try again]");
         return;
       }
       setSuccess(body.scheduled ? "Scheduled with Buffer — it will post at the chosen time." : "Sent to Buffer.");
       await fetchQueue();
     } catch {
-      setError("Could not send the draft.");
+      setError("VervAI couldn't publish this post. Your draft is still available. [Review draft] [Try again]");
     } finally {
       setSendingJobId(null);
     }
@@ -248,7 +248,7 @@ export default function PublishQueuePanel() {
                 </svg>
               }
               title="Publish queue is empty"
-              description="No drafts are queued yet. Finished agent runs list their drafts here for you to queue for approval."
+              description="Your content library is empty. Add a source to give VervAI something to work with."
             />
           ) : (
             <div className="divide-y divide-theme-divider">

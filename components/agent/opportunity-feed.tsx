@@ -71,10 +71,10 @@ export default function OpportunityFeed({
         const body = (await res.json()) as StrategyData;
         if (body.ok) setData(body);
       } else {
-        setError("Could not load strategy data.");
+        setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
       }
     } catch {
-      setError("Could not load strategy data.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -100,7 +100,7 @@ export default function OpportunityFeed({
     try {
       onStartRun(sourceId, mode);
     } catch {
-      setError("Failed to start run.");
+      setError("VervAI couldn't complete this action. Your content is safe. [Try again]");
     } finally {
       setStartingId(null);
     }
@@ -113,8 +113,8 @@ export default function OpportunityFeed({
     <div ref={cardRef}>
       <Card>
       <CardHeader
-        title="What should I work on next?"
-        description={refreshing ? "Refreshing…" : "Agent recommendations from your real content, scores, and budget."}
+        title="What should VervAI work on next?"
+        description={refreshing ? "Refreshing…" : "VervAI recommendations from your real content, scores, and budget."}
         action={
           <button
             type="button"
