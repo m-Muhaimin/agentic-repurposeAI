@@ -47,8 +47,9 @@ const ALLOWED_CONTEXT_PATTERNS = [
   // package name field (compat) — package.json AND its lockfile
   /package\.json/,
   /package-lock\.json/,
-  // The checker itself must contain the patterns it looks for
+  // The checkers themselves must contain the patterns they look for
   /scripts\/brand-check\.mjs/,
+  /scripts\/check-brand\.(?:mjs|ts)/,
   // Legal pages + comms domains mention providers / contact addresses
   /legal\//,
   /support@repurpose-ai\.app/,
@@ -76,8 +77,8 @@ function isAllowedContext(filePath, lineContent) {
     return true;
   }
 
-  // The checker itself must contain the patterns it looks for.
-  if (/^scripts\/brand-check\.mjs$/.test(relativePath)) {
+  // The checkers themselves must contain the patterns they look for.
+  if (/^scripts\/(?:brand-check\.mjs|check-brand\.(?:mjs|ts))$/.test(relativePath)) {
     return true;
   }
 

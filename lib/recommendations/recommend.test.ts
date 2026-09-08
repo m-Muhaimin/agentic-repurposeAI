@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { outputRegistry } from "@/lib/output-registry";
 import { analyzeContent } from "@/lib/intelligence";
 import { recommend } from "./recommend";
+import { objectiveFitValue } from "./objective-fit";
 import type { Objective, ContentIntelligence, DerivedOpportunityKind } from "./types";
 import type { DerivedOpportunity } from "@/lib/intelligence/types";
 
@@ -86,6 +87,11 @@ describe("recommend", () => {
     expect(liPost).toBeTruthy();
     expect(news).toBeTruthy();
     expect(liPost!.score).toBeGreaterThan(news!.score);
+  });
+
+  it("objective-fit (spec 6C): grow_linkedin fits newsletter above shortform", () => {
+    expect(objectiveFitValue(objective("grow_linkedin"), "newsletter")).toBe(0.6);
+    expect(objectiveFitValue(objective("grow_linkedin"), "shortform_script")).toBe(0.3);
   });
 
   it("objective changes ranking: grow_email ranks newsletter highest", () => {

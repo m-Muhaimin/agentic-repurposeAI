@@ -5,6 +5,8 @@
 // so the policy truly interoperates with the rest of the app.
 
 import { describe, it, expect } from "vitest";
+import { analyzeContent } from "@/lib/intelligence";
+import { recommend } from "@/lib/recommendations";
 import {
   canTransition,
   canPause,
@@ -204,6 +206,51 @@ describe("planner + approvals", () => {
       approvePublish: false
     });
     expect(plan).toBeInstanceOf(Error);
+  });
+
+  it("6O full chain: intelligence → recommendations → selected outputs → plan steps", () => {
+    const ci = analyzeContent(
+      `We launched in 2019. The data clearly shows remote teams win. That's why we built our own async tooling.
+
+What if you shipped ten times faster? We did.
+
+"Bigger teams are slower" is the thing most people get wrong. Even though the evidence points the other way.
+
+So we stripped everything down to the essentials.`,
+      { sourceId: "src-1", sourceType: "youtube", title: "Launching Async First" }
+    );
+
+    const recs = recommend({
+      objective: { kind: "get_reach", label: "Get more reach" },
+      intelligence: ci
+    });
+    expect(recs.length).toBeGreaterThan(0);
+
+    const plan = buildPlan({
+      recommendations: recs,
+      objective: { text: "Get more reach", normalized: "get_reach" },
+      sourceIds: [ci.sourceId],
+      maxOutputs: 3,
+      approveGenerate: true,
+      approvePublish: true
+    }) as OrchestrationPlan;
+
+    // The plan plans exactly the evidence-passing recommendations, in ranked order.
+    expect(plan.outputIds.length).toBeGreaterThan(0);
+    expect(plan.outputIds[0]).toBe(recs[0].definition.id);
+
+    // Every planned output carries a generate step plus a review step on it.
+    for (const outId of plan.outputIds) {
+      const gen = plan.steps.find((s) => s.type === "generate" && s.outputId === outId);
+      const rev = plan.steps.find((s) => s.type === "review" && s.outputId === outId);
+      expect(gen).toBeTruthy();
+      expect(rev).toBeTruthy();
+      expect(rev!.dependsOn).toContain(gen!.id);
+      expect(gen!.sourceIds).toEqual([ci.sourceId]);
+    }
+
+    expect(plan.approvalRequired).toBe(true);
+    expect(plan.status).toBe("draft");
   });
 
   it("versioning invalidates an approval", () => {

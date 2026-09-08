@@ -68,7 +68,7 @@ async function objectiveForUser(
 type DbIntelligence = {
   id: string;
   source_id: string;
-  data: string; // JSON-encoded ContentIntelligence
+  intelligence: unknown; // jsonb ContentIntelligence artifact
   user_id: string;
 };
 
@@ -85,11 +85,11 @@ async function fetchIntelligence(
   // depending on whether migration 0004 has been applied. We cast through
   // unknown so the route compiles in both cases — at runtime the table exists
   // (verified by verify-rls / verify-agentic), so the query shape is correct.
-  type CIRow = { id: string; source_id: string; data: string; user_id: string };
+  type CIRow = { id: string; source_id: string; intelligence: unknown; user_id: string };
   const { data: intel, error: intelError } =
     await supabase
       .from("content_intelligence")
-      .select("id, source_id, data, user_id")
+      .select("id, source_id, intelligence, user_id")
       .eq("source_id", sourceId)
       .single() as { data: CIRow | null; error: { code: string } | null };
 
@@ -131,7 +131,13 @@ async function sourceOwnedByUser(
   return !!data;
 }
 
-function parseIntelligence(raw: string): ContentIntelligence | null {
+function parseIntelligence(raw: unknown): ContentIntelligence | null {
+  // The column is jsonb, so supabase returns a parsed object. Accept both the
+  // object form and a legacy JSON-encoded string so the parse never breaks on
+  // a differently-restored table.
+  if (typeof raw !== "string") {
+    return (raw as ContentIntelligence) ?? null;
+  }
   try {
     return JSON.parse(raw);
   } catch {
@@ -166,7 +172,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Content intelligence not found or not accessible" }, { status: 404 });
   }
 
-  const intelligence = parseIntelligence(dbIntelligence.data);
+  const intelligence = parseIntelligence(dbIntelligence.intelligence);
   if (!intelligence) {
     return NextResponse.json({ error: "Malformed intelligence data" }, { status: 500 });
   }

@@ -25,13 +25,13 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
       fit: "strong",
       reason: "Built for LinkedIn's algorithm and your profile",
     },
-    shortform_script: {
-      fit: "good",
-      reason: "Short clips drive profile visits",
-    },
     newsletter: {
+      fit: "good",
+      reason: "A newsletter builds a warm audience you can direct to LinkedIn",
+    },
+    shortform_script: {
       fit: "possible",
-      reason: "Email list helps, but indirect for LinkedIn growth",
+      reason: "Short clips help, but less consistently than owned channels",
     },
   },
 

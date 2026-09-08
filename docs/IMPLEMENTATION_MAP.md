@@ -558,9 +558,12 @@ authoritative Output Registry and the intelligence engine.
   EnrichedRecommendation). Pure + deterministic; no LLM.
 - **Output Registry stays authoritative.** Recommend reads `outputRegistry`
   definitions; `lib/recommendations/index.ts` is the public API.
-- **Dashboard surfaces** — `ObjectivePrompt` ("Create with VervAI" →
-  `/agent?goal=`), `OpportunityNext` (→ `/agent?source=`), `AtAGlance`,
-  a recommendations row; `app/api/recommendations/route.ts` serves the flow.
+- **Dashboard + API** — `ObjectivePrompt` ("Create with VervAI" →
+  `/agent?goal=`), `OpportunityNext` (→ `/agent?source=`), `AtAGlance`;
+  `app/api/recommendations/route.ts` (GET, sourceId, ownership-gated,
+  objective-aware) serves the engine. The live dashboard recommendation surface
+  is still the Phase 5 strategy engine — a dedicated ranked-recommendations UI
+  row wired to this route is a Phase 7 item.
 - **VervAI brand migration** — `lib/brand.ts` (`BRAND` constant),
   `app/layout.tsx` metadata title/description, `docs/VERVAI_BRAND_MIGRATION.md`
   audit table, user-facing legacy strings replaced (output-editor, openrouter

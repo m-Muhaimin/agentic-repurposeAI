@@ -277,8 +277,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ open · 🔵 user action (not cod
 > opportunity-mapping, scoring, recommend) reuses the authoritative Output
 > Registry and the intelligence engine — it never forks them. The dashboard
 > surfaces (`ObjectivePrompt` → `/agent?goal=`, `OpportunityNext` →
-> `/agent?source=`, `AtAGlance`, `RecommendationsRow`) and `POST
-> /api/recommendations` wire the flow. VervAI brand migration shipped:
+> `/agent?source=`, `AtAGlance`) and `GET /api/recommendations` (ownership- and
+> objective-aware) expose the engine; the ranked-recommendations UI row wired
+> to that route remains a Phase 7 item. VervAI brand migration shipped:
 > `lib/brand.ts` (canonical `BRAND`), `app/layout.tsx` metadata, `docs/
 > VERVAI_BRAND_MIGRATION.md` audit, and a regression `npm run brand-check`
 > (`scripts/brand-check.mjs`) that exits non-zero on any unexpected legacy
