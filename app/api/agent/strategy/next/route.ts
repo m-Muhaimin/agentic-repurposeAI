@@ -68,7 +68,7 @@ function deterministicRationale(res: StrategyResult): string {
   if (!rec) {
     return headroom.atLimit
       ? `No next action: your monthly job budget is exhausted (${headroom.jobsUsed} of ${headroom.jobsLimit} used). It resets at the start of next month.`
-      : "No next action: none of your sources has a ready transcript yet. Repurpose or finish transcription on a source first.";
+      : "No next action: none of your sources has a ready transcript yet. Create or finish transcribing a source first.";
   }
   return `Publish next from "${rec.sourceTitle}"${rec.angleTitle ? ` around the angle "${rec.angleTitle}"` : ""} as ${rec.formats.length ? rec.formats.join(", ") : "your usual formats"}. It ranks highest on your objective scores and recent behaviour. You have ${headroom.jobsRemaining === null ? "no monthly cap" : `${headroom.jobsRemaining} job${headroom.jobsRemaining === 1 ? "" : "s"} left this month`}; a run here stays within your ${headroom.perRunAgent.maxSteps}-step budget.`;
 }
