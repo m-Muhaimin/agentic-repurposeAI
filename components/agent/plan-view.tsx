@@ -198,8 +198,8 @@ export default function PlanView({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-theme-divider px-5 py-4">
         <p className="text-xs text-theme-text-secondary">
-          Drafts are generated only for the angles you keep. In execute mode a flagged draft gets one bounded
-          revision.
+          Drafts are generated only for the angles you keep. In “Do it with my approval” mode a flagged
+          draft gets one bounded revision.
         </p>
         <div className="flex gap-2">
           <button type="button" onClick={onReject} disabled={submitting} className="btn text-sm">

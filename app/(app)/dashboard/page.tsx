@@ -2,13 +2,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { resolvePlan } from "@/lib/billing/entitlements";
 import { getUsageSnapshot, type UsageSnapshot } from "@/lib/billing/usage";
-import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import { Card, CardHeader, CardFooter } from "@/components/card";
 import StatusBadge from "@/components/status-badge";
-import EmptyState from "@/components/empty-state";
 import { UsageMeter } from "@/components/usage-meter";
 import { PENDING_STATUS } from "@/lib/status";
+import ObjectivePrompt from "@/components/dashboard/objective-prompt";
+import AtAGlance from "@/components/dashboard/at-a-glance";
+import OpportunityNext from "@/components/dashboard/opportunity-next";
 
 // Renders the Beta plan strip above the content regardless of empty/full state
 // so every visit communicates the current entitlement.
@@ -78,10 +79,10 @@ function timeAgo(iso: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(iso));
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "default" }) {
+function MiniStat({ label, value, tone }: { label: string; value: number; tone?: "red" | "default" }) {
   return (
-    <div className="rounded-lg border border-theme-divider bg-theme-bg-paper p-5">
-      <p className="font-display text-3xl font-bold tabular-nums text-theme-text-primary">{value}</p>
+    <div>
+      <p className="font-display text-2xl font-bold tabular-nums text-theme-text-primary">{value}</p>
       <p className={`mt-1 text-sm ${tone === "red" ? "font-medium text-red-600" : "text-theme-text-secondary"}`}>
         {label}
       </p>
@@ -170,38 +171,17 @@ export default async function OverviewPage() {
   }
 
   return (
-    <AppShell>
-      <div className="workspace py-8 lg:py-10">
-        <PageHeader
-          className="mb-8"
-          title="Overview"
-          description="Turn your long-form conversations into content you can publish."
-          actions={
-            <>
-              <Link href="/library" className="btn btn-outline-primary">
-                View content library
-              </Link>
-              <Link href="/upload" className="btn btn-primary">
-                <span className="flex items-center gap-2">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    className="size-4"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Repurpose content
-                </span>
-              </Link>
-            </>
-          }
-        />
+    <div className="workspace py-8 lg:py-10">
+      <PageHeader
+        className="mb-6"
+        title="Overview"
+        description="Your command center — what needs you, what's working, and what to make next, all from your real data."
+      />
 
-        {entitlement && (
+      <ObjectivePrompt />
+
+      {entitlement && (
+        <div className="mt-5">
           <UsageStrip
             usage={{
               jobsUsed: entitlement.used,
@@ -213,197 +193,140 @@ export default async function OverviewPage() {
             }}
             planName={entitlement.planName}
           />
-        )}
+        </div>
+      )}
 
-        {allSources.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="size-6"
-                aria-hidden="true"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            }
-            title="Welcome back"
-            description="Upload a recording, add a transcript, or connect a YouTube video — RepurposeAI turns it into publish-ready drafts."
-            action={
-              <Link href="/upload" className="btn btn-primary mt-2">
-                Repurpose content
-              </Link>
-            }
-          />
-        ) : (
-          <>
-            <div className="mt-4 grid gap-4 lg:grid-cols-12">
-              {/* Quick repurpose — the dominant action */}
-              <div className="flex flex-col justify-between overflow-hidden rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 p-6 text-white lg:col-span-5">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="size-5"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                    </span>
-                    <span className="badge bg-white/15 text-white">Free during beta</span>
-                  </div>
-                  <h2 className="mt-5 font-display text-lg font-semibold">
-                    Repurpose a new recording
-                  </h2>
-                  <p className="mt-1.5 text-sm leading-normal text-primary-100">
-                    Drop in a recording and get a LinkedIn post, newsletter section, and short-form
-                    script — ready to edit in minutes.
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["Upload media", "YouTube", "Transcript"].map((m) => (
-                      <span
-                        key={m}
-                        className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-primary-50"
-                      >
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-12">
+        {/* Left rail — the queue, then recent work */}
+        <div className="flex flex-col gap-5 lg:col-span-7">
+          <AtAGlance />
+
+          <Card>
+            <CardHeader
+              title="Recent content"
+              action={
                 <Link
-                  href="/upload"
-                  className="btn mt-6 self-start bg-white text-primary-600 hover:bg-primary-50"
+                  href="/library"
+                  className="caption text-primary-500 transition-colors hover:text-primary-700"
                 >
-                  Start repurposing
+                  View library →
                 </Link>
+              }
+            />
+            {allSources.length === 0 ? (
+              <div className="px-5 py-10">
+                <p className="text-sm text-theme-text-secondary">
+                  Nothing here yet — repurpose your first piece of content and it will show up here.
+                </p>
               </div>
+            ) : (
+              <ul className="divide-y divide-theme-divider">
+                {allSources.slice(0, 5).map((source) => (
+                  <li key={source.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-theme-text-primary">{source.title}</p>
+                      <p className="mt-0.5 truncate text-sm text-theme-text-secondary">
+                        {source.status === "failed" ? (
+                          <span className="text-red-600">{source.error_message ?? "Failed"}</span>
+                        ) : (
+                          ActivitySummary({ source })
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <StatusBadge status={source.status} />
+                      <span className="hidden text-xs text-theme-text-secondary sm:block">
+                        {timeAgo(source.created_at)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
 
-              {/* Metrics — medium priority, dense 2x2 */}
-              <div className="grid grid-cols-2 items-start gap-4 lg:col-span-7">
-                <StatCard label="Content pieces" value={contentPieces} />
-                <StatCard label="Drafts created" value={drafts} />
-                <StatCard label="In progress" value={inProgress} />
-                <StatCard label="Needs attention" value={needsAttention} tone={needsAttention ? "red" : "default"} />
-              </div>
+        {/* Right rail — what to do next, then performance, then the system */}
+        <div className="flex flex-col gap-5 lg:col-span-5">
+          <OpportunityNext />
+
+          <Card>
+            <CardHeader
+              title="Performance"
+              description="A compact snapshot of your content system."
+            />
+            <div className="grid grid-cols-2 gap-5 p-5">
+              <MiniStat label="Content pieces" value={contentPieces} />
+              <MiniStat label="Drafts created" value={drafts} />
+              <MiniStat label="In progress" value={inProgress} />
+              <MiniStat
+                label="Needs attention"
+                value={needsAttention}
+                tone={needsAttention ? "red" : "default"}
+              />
             </div>
+          </Card>
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-12">
-              {/* Recent activity */}
-              <Card className="lg:col-span-8">
-                <CardHeader
-                  title="Recent activity"
-                  action={
-                    <Link
-                      href="/library"
-                      className="caption text-primary-500 transition-colors hover:text-primary-700"
-                    >
-                      View library →
-                    </Link>
-                  }
-                />
-                {allSources.length === 0 ? (
-                  <p className="px-5 py-10 text-center text-sm text-theme-text-secondary">
-                    Nothing here yet — repurpose your first piece of content.
+          <Card>
+            <CardHeader
+              title="Your content system"
+              description="Voice, outputs, and the platforms you work with."
+            />
+            <ul className="flex flex-col gap-4 px-5 py-5">
+              <li className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-theme-text-primary">Brand voice</p>
+                  <p className="text-xs text-theme-text-secondary">
+                    {brandVoiceSet
+                      ? "Personalised"
+                      : formatOverrides > 0
+                        ? `${formatOverrides} format${formatOverrides === 1 ? "" : "s"} customised`
+                        : "Following defaults"}
                   </p>
+                </div>
+                <span
+                  className={`badge ${
+                    brandVoiceSet || formatOverrides > 0
+                      ? "bg-primary-100 text-primary-700"
+                      : "bg-neutral-100 text-neutral-600"
+                  }`}
+                >
+                  {brandVoiceSet || formatOverrides > 0 ? "Set" : "Defaults"}
+                </span>
+              </li>
+              <li className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-theme-text-primary">Output preferences</p>
+                  <p className="text-xs text-theme-text-secondary">LinkedIn · Newsletter · Short-form</p>
+                </div>
+                <span className="badge bg-primary-100 text-primary-700">3 formats</span>
+              </li>
+              <li className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-theme-text-primary">YouTube</p>
+                  <p className="text-xs text-theme-text-secondary">
+                    {youtubeConnected
+                      ? youtubeChannel ?? "Connected"
+                      : "Connect your channel to use captions"}
+                  </p>
+                </div>
+                {youtubeConnected ? (
+                  <span className="badge bg-neutral-900 text-white">Connected</span>
                 ) : (
-                  <ul className="divide-y divide-theme-divider">
-                    {allSources.slice(0, 5).map((source) => (
-                      <li key={source.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-theme-text-primary">{source.title}</p>
-                          <p className="mt-0.5 truncate text-sm text-theme-text-secondary">
-                            {source.status === "failed" ? (
-                              <span className="text-red-600">{source.error_message ?? "Failed"}</span>
-                            ) : (
-                              ActivitySummary({ source })
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          <StatusBadge status={source.status} />
-                          <span className="hidden text-xs text-theme-text-secondary sm:block">
-                            {timeAgo(source.created_at)}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-
-              {/* Your content system */}
-              <Card className="lg:col-span-4">
-                <CardHeader
-                  title="Your content system"
-                  description="Voice, outputs, and the platforms you work with."
-                />
-                <ul className="flex flex-col gap-4 px-5 py-5">
-                  <li className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-theme-text-primary">Brand voice</p>
-                      <p className="text-xs text-theme-text-secondary">
-                        {brandVoiceSet
-                          ? "Personalised"
-                          : formatOverrides > 0
-                            ? `${formatOverrides} format${formatOverrides === 1 ? "" : "s"} customised`
-                            : "Following defaults"}
-                      </p>
-                    </div>
-                    <span
-                      className={`badge ${
-                        brandVoiceSet || formatOverrides > 0
-                          ? "bg-primary-100 text-primary-700"
-                          : "bg-neutral-100 text-neutral-600"
-                      }`}
-                    >
-                      {brandVoiceSet || formatOverrides > 0 ? "Set" : "Defaults"}
-                    </span>
-                  </li>
-                  <li className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-theme-text-primary">Output preferences</p>
-                      <p className="text-xs text-theme-text-secondary">LinkedIn · Newsletter · Short-form</p>
-                    </div>
-                    <span className="badge bg-primary-100 text-primary-700">3 formats</span>
-                  </li>
-                  <li className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-theme-text-primary">YouTube</p>
-                      <p className="text-xs text-theme-text-secondary">
-                        {youtubeConnected
-                          ? youtubeChannel ?? "Connected"
-                          : "Connect your channel to use captions"}
-                      </p>
-                    </div>
-                    {youtubeConnected ? (
-                      <span className="badge bg-neutral-900 text-white">Connected</span>
-                    ) : (
-                      <Link href="/connections" className="btn btn-outline-primary btn-sm">
-                        Connect
-                      </Link>
-                    )}
-                  </li>
-                </ul>
-                <CardFooter>
-                  <Link href="/branding" className="btn btn-light-primary w-full">
-                    Manage brand &amp; voice
+                  <Link href="/connections" className="btn btn-outline-primary btn-sm">
+                    Connect
                   </Link>
-                </CardFooter>
-              </Card>
-            </div>
-          </>
-        )}
+                )}
+              </li>
+            </ul>
+            <CardFooter>
+              <Link href="/branding" className="btn btn-light-primary w-full">
+                Manage brand &amp; voice
+              </Link>
+            </CardFooter>
+          </Card>
+        </div>
       </div>
-    </AppShell>
+    </div>
   );
 }

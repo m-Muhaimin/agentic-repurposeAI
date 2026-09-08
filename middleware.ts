@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
     "/connections",
     "/library",
     "/agent",
+    "/publish",
     "/settings",
     "/content",
     "/reset-password",

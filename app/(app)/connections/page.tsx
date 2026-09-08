@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import { Card } from "@/components/card";
 import ConnectionsYoutube from "@/components/connections-youtube";
@@ -52,7 +51,6 @@ export default async function ConnectionsPage({
       : null;
 
   return (
-    <AppShell>
       <div className="workspace py-8 lg:py-10">
         <PageHeader
           className="mb-8"
@@ -90,6 +88,5 @@ export default async function ConnectionsPage({
           </Card>
         </div>
       </div>
-    </AppShell>
   );
 }

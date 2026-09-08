@@ -1,30 +1,24 @@
-import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import ObservePanel from "@/components/agent/observe-panel";
-import PublishQueuePanel from "@/components/agent/publish-queue-panel";
 import ScalePanel from "@/components/agent/scale-panel";
 
 export const dynamic = "force-dynamic";
 
-// Observe: publish queue (P10) + insights (P11) + scale overview (P13).
-// Read-mostly, honest data only. Nothing on this page publishes while channels
-// are disconnected.
+// Insights: run/step/spend transparency (ObservePanel) + the permission-model
+// scale overview (ScalePanel). Publish lives on its own /publish page.
 export default function ObservePage() {
   return (
-    <AppShell>
-      <div className="workspace py-8 lg:py-10">
-        <PageHeader
-          title="Observe"
-          description="Your publish queue, insights and scale overview — computed from real data, with publishing awaiting your explicit approval."
-        />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <PublishQueuePanel />
-          <div className="space-y-6">
-            <ObservePanel />
-            <ScalePanel />
-          </div>
+    <div className="workspace py-8 lg:py-10">
+      <PageHeader
+        title="Insights"
+        description="Real run, step and spend data from your agent workspace — plus how much your agent is allowed to do on its own."
+      />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <ObservePanel />
+        <div className="space-y-6">
+          <ScalePanel />
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 }

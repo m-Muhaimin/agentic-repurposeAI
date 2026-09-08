@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/card";
 import type { AgentRunSummary, RunStatus } from "@/types/agent";
+import { AGENT_MODE_LABEL } from "@/types/agent";
 
 const RUN_LABEL: Record<RunStatus, string> = {
   created: "Preparing",
@@ -85,7 +86,8 @@ export default function RunList({
                     <span className="block truncate text-xs italic text-theme-text-secondary">“{goals[r.id]}”</span>
                   )}
                   <span className="block text-xs text-theme-text-secondary">
-                    {new Date(r.created_at).toLocaleString(undefined, { month: "short", day: "numeric" })} · {r.mode}
+                    {new Date(r.created_at).toLocaleString(undefined, { month: "short", day: "numeric" })} ·{" "}
+                    {AGENT_MODE_LABEL[r.mode as keyof typeof AGENT_MODE_LABEL] ?? r.mode}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">

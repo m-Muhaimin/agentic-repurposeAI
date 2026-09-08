@@ -125,8 +125,10 @@ export default function CreateMenu({
           role="menu"
           aria-label="Create"
           className={clsx(
-            "absolute top-[calc(100%+8px)] z-50 w-80 max-w-[calc(100vw-2rem)] animate-fade-in rounded-xl border border-theme-divider bg-theme-bg-paper p-2 shadow-xl",
-            alignRight ? "right-0" : "left-0"
+            "z-50 w-80 max-w-[calc(100vw-2rem)] animate-fade-in rounded-xl border border-theme-divider bg-theme-bg-paper p-2 shadow-xl",
+            alignRight
+              ? "fixed right-4 top-[76px]"
+              : "absolute left-0 top-[calc(100%+8px)]"
           )}
         >
           <p className="caption px-3 pb-1 pt-2 text-theme-text-secondary">

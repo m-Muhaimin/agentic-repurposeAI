@@ -1,18 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardHeader } from "@/components/card";
-
-const NOTIFY_READY_KEY = "prefs:notify_drafts_ready";
-const NOTIFY_FAILED_KEY = "prefs:notify_failed";
-
-function readBoolean(key: string, fallback: boolean): boolean {
-  if (typeof window === "undefined") return fallback;
-  return localStorage.getItem(key) === null ? fallback : localStorage.getItem(key) === "1";
-}
 
 export default function SettingsForm({ email, name: initialName }: { email: string; name: string }) {
   const router = useRouter();
@@ -22,14 +14,7 @@ export default function SettingsForm({ email, name: initialName }: { email: stri
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileStatus, setProfileStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const [notifyReady, setNotifyReady] = useState(true);
-  const [notifyFailed, setNotifyFailed] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
-
-  useEffect(() => {
-    setNotifyReady(readBoolean(NOTIFY_READY_KEY, true));
-    setNotifyFailed(readBoolean(NOTIFY_FAILED_KEY, true));
-  }, []);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -115,40 +100,20 @@ export default function SettingsForm({ email, name: initialName }: { email: stri
       <Card>
         <CardHeader
           title="Preferences"
-          description="Email notifications about your content."
+          description="Optional alerts, coming soon."
         />
-        <ul className="flex flex-col">
-          <li className="flex items-center justify-between gap-4 border-b border-theme-divider px-5 py-4 last:border-0">
+        <div className="px-5 py-5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-theme-divider p-4">
             <div>
-              <p className="text-sm font-medium text-theme-text-primary">Drafts ready</p>
-              <p className="text-xs text-theme-text-secondary">Notify me when drafts are generated.</p>
+              <p className="text-sm font-medium text-theme-text-primary">In-app alerts</p>
+              <p className="text-xs text-theme-text-secondary">
+                Notifications when drafts are ready or processing fails — we&apos;re building these
+                and they aren&apos;t live yet.
+              </p>
             </div>
-            <input
-              type="checkbox"
-              checked={notifyReady}
-              onChange={(e) => {
-                setNotifyReady(e.target.checked);
-                localStorage.setItem(NOTIFY_READY_KEY, e.target.checked ? "1" : "0");
-              }}
-              className="size-4 accent-primary-500"
-            />
-          </li>
-          <li className="flex items-center justify-between gap-4 px-5 py-4">
-            <div>
-              <p className="text-sm font-medium text-theme-text-primary">Processing fails</p>
-              <p className="text-xs text-theme-text-secondary">Notify me when a job fails.</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={notifyFailed}
-              onChange={(e) => {
-                setNotifyFailed(e.target.checked);
-                localStorage.setItem(NOTIFY_FAILED_KEY, e.target.checked ? "1" : "0");
-              }}
-              className="size-4 accent-primary-500"
-            />
-          </li>
-        </ul>
+            <span className="badge bg-neutral-900 text-white shrink-0">Coming soon</span>
+          </div>
+        </div>
       </Card>
 
       {/* Account */}

@@ -129,6 +129,25 @@ const NAV_GROUPS: NavGroup[] = [
             <path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
         )
+      },
+      {
+        label: "Publish queue",
+        href: "/publish",
+        icon: (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[18px]"
+            aria-hidden="true"
+          >
+            <path d="M17 8l4-4m0 0-4-4m4 4h-9a6 6 0 0 0-6 6v7" />
+            <path d="M7 16l-4 4m0 0 4 4m-4-4h9a6 6 0 0 0 6-6v-7" />
+          </svg>
+        )
       }
     ]
   },
@@ -136,7 +155,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Insights",
     items: [
       {
-        label: "AI learnings",
+        label: "Agent insights",
         href: "/agent/observe",
         icon: (
           <svg
@@ -405,6 +424,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-neutral-50 lg:flex">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-500 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      >
+        Skip to content
+      </a>
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-theme-divider bg-theme-bg-paper lg:flex">
         <SidebarContent isActive={isActive} createMenu={<CreateMenu />} />
@@ -419,7 +444,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="nav-link"
+              className="nav-link min-h-[44px]"
               aria-label="Open menu"
               aria-expanded={sidebarOpen}
               aria-controls="mobile-sidebar"
@@ -440,7 +465,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1">{children}</main>
+        <main id="main-content" className="flex-1">{children}</main>
       </div>
 
       {/* Mobile collapsible sidebar (drawer) */}
@@ -468,7 +493,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(false)}
-                  className="nav-link"
+                  className="nav-link min-h-[44px]"
                   aria-label="Close menu"
                 >
                   <svg

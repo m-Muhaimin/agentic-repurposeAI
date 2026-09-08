@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import AgentWorkspace from "@/components/agent/agent-workspace";
 import type { AgentContextData } from "@/components/agent/agent-context-strip";
@@ -8,7 +7,23 @@ import { getConnection } from "@/lib/buffer/connections";
 
 export const dynamic = "force-dynamic";
 
-export default async function AgentPage() {
+type QueryValue = string | string[] | undefined;
+
+function param(v: QueryValue): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+export default async function AgentPage({
+  searchParams
+}: {
+  searchParams: { goal?: QueryValue; source?: QueryValue; run?: QueryValue };
+}) {
+  // Real deep links FROM the dashboard: ?goal= prefills the composer,
+  // ?source= preselects a ready source, ?run= loads that run's plan.
+  const initialGoal = param(searchParams?.goal)?.slice(0, 800);
+  const initialSourceId = param(searchParams?.source);
+  const initialRunId = param(searchParams?.run);
+
   const supabase = createClient();
   const {
     data: { user }
@@ -90,7 +105,6 @@ export default async function AgentPage() {
   };
 
   return (
-    <AppShell>
       <div className="workspace py-8 lg:py-10">
         <PageHeader
           title="Agent"
@@ -105,8 +119,10 @@ export default async function AgentPage() {
           }))}
           defaultSourceId={readySources[0]?.id ?? null}
           context={context}
+          initialGoal={initialGoal}
+          initialSourceId={initialSourceId}
+          initialRunId={initialRunId}
         />
       </div>
-    </AppShell>
   );
 }

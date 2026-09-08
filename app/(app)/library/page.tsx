@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { resolvePlan } from "@/lib/billing/entitlements";
 import { getUsageSnapshot } from "@/lib/billing/usage";
-import AppShell from "@/components/app-shell";
 import PageHeader from "@/components/page-header";
 import SourceList from "./source-list";
 
@@ -33,7 +32,6 @@ export default async function LibraryPage() {
   }
 
   return (
-    <AppShell>
       <div className="workspace py-8 lg:py-10">
         <PageHeader
           title="Content Library"
@@ -67,6 +65,5 @@ export default async function LibraryPage() {
         />
         <SourceList initialSources={sources ?? []} userId={user!.id} />
       </div>
-    </AppShell>
   );
 }

@@ -8,10 +8,13 @@ export type AgentMode = "assist" | "execute" | "automate";
 
 export const AGENT_MODES: readonly AgentMode[] = ["assist", "execute", "automate"];
 
+// User-facing names for the autonomy axis. Everything below MUST stay internal:
+// the enum values ("assist"/"execute"/"automate") never appear in user copy —
+// UI maps them through this table (composer, run history, scale panel).
 export const AGENT_MODE_LABEL: Record<AgentMode, string> = {
-  assist: "Assist",
-  execute: "Execute",
-  automate: "Automate"
+  assist: "Guide me",
+  execute: "Do it with my approval",
+  automate: "Run automatically"
 };
 
 // ── Content Plan (the planner's single structured output) ──────────────────

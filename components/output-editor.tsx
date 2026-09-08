@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -222,7 +223,7 @@ export default function OutputEditor({
         <p className="text-sm text-theme-text-secondary">
           {mode === "edit" ? `${wordCount} words` : "Generated from your recording with Repurpose AI"}
         </p>
-        {mode === "edit" && (
+        {mode === "edit" ? (
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -241,6 +242,14 @@ export default function OutputEditor({
               {saving ? "Saving…" : "Save changes"}
             </button>
           </div>
+        ) : (
+          message && (
+            <div className="flex items-center gap-3">
+              <Link href="/library" className="btn btn-outline-primary btn-sm">
+                Back to library
+              </Link>
+            </div>
+          )
         )}
       </div>
     </div>

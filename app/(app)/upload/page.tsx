@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { isValidYoutubeUrl } from "@/lib/youtube-url";
 import {
@@ -59,7 +59,7 @@ export default function UploadPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<ClientUsage | null>(null);
-  const router = useRouter();
+  const [receivedSource, setReceivedSource] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     const outcome = new URLSearchParams(window.location.search).get("youtube");
@@ -352,7 +352,13 @@ export default function UploadPage() {
       // retries) idempotent — they never consume a second job.
       const jobId = await enqueueProcessing(sourceId, formats, crypto.randomUUID());
       kickProcessing(jobId);
-      router.push("/dashboard");
+      // Land on a real "Content received" hand-off instead of silently dumping
+      // to the dashboard: the next action is the user's call.
+      const raw = title.trim() || "your content";
+      setReceivedSource({
+        id: sourceId,
+        title: raw.length > 60 ? `${raw.slice(0, 57)}…` : raw
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -361,8 +367,40 @@ export default function UploadPage() {
   }
 
   return (
-      <div className="workspace flex justify-center py-8 lg:py-12">
-        <div className="w-full max-w-xl">
+    <div className="workspace flex justify-center py-8 lg:py-12">
+      <div className="w-full max-w-xl">
+        {receivedSource ? (
+          <div className="rounded-lg border border-theme-divider bg-theme-bg-paper p-6 sm:p-8">
+            <span className="badge bg-primary-100 text-primary-700">Content received</span>
+            <h1 className="mt-4 font-display text-xl font-semibold text-theme-text-primary">
+              “{receivedSource.title}” is saved and headed to your drafts.
+            </h1>
+            <p className="mt-1.5 text-sm text-theme-text-secondary">
+              Processing runs in the background — you don&apos;t need to wait. What would you like to do
+              next?
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <Link
+                href={`/agent?source=${receivedSource.id}`}
+                className="btn btn-primary w-full"
+              >
+                Ask the agent what to create from it
+              </Link>
+              <Link
+                href={`/repurpose/${receivedSource.id}`}
+                className="btn btn-outline-primary w-full"
+              >
+                Choose outputs myself
+              </Link>
+              <Link href="/library" className="btn w-full">
+                Add to library and keep browsing
+              </Link>
+            </div>
+            <p className="mt-4 text-center text-xs text-theme-text-secondary">
+              Progress shows in your library and on the dashboard.
+            </p>
+          </div>
+        ) : (
           <div className="rounded-lg border border-theme-divider bg-theme-bg-paper p-6 sm:p-8">
             <PageHeader
             title="Create content from your next recording"
@@ -603,7 +641,8 @@ export default function UploadPage() {
               )}
             </form>
           </div>
-        </div>
+        )}
       </div>
+    </div>
   );
 }

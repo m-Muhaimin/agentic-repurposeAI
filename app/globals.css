@@ -101,7 +101,7 @@
   }
 
   .side-nav-link {
-    @apply flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
+    @apply flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 py-2 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
   }
 
   .side-nav-link.active {
@@ -115,7 +115,8 @@
 
   /* == Buttons == */
   .btn {
-    @apply inline-block cursor-pointer select-none rounded-lg border border-transparent bg-transparent px-[23px] py-2.5 text-center text-[14px] font-semibold leading-[1.429] tracking-[0.1px] transition-all duration-[250ms] ease-in-out active:scale-[0.98];
+    @apply inline-flex cursor-pointer select-none items-center justify-center gap-2 rounded-lg border border-transparent bg-transparent px-[23px] py-2.5 text-center text-[14px] font-semibold leading-[1.429] tracking-[0.1px] transition-all duration-[250ms] ease-in-out active:scale-[0.98];
+    min-height: 44px;
     font-family: var(--font-archivo);
   }
 
@@ -298,6 +299,10 @@
     .animate-progress-shimmer,
     .animate-spin-slow {
       animation: none !important;
+    }
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }

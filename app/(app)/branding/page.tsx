@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserPrompts } from "@/lib/prompts";
-import AppShell from "@/components/app-shell";
 import BrandingForm from "@/components/branding-form";
 
 export default async function BrandingPage() {
@@ -20,9 +19,5 @@ export default async function BrandingPage() {
     prompts = {};
   }
 
-  return (
-    <AppShell>
-      <BrandingForm initial={prompts} />
-    </AppShell>
-  );
+  return <BrandingForm initial={prompts} />;
 }

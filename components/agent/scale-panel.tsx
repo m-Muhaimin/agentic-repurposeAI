@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/card";
+import { AGENT_MODE_LABEL } from "@/types/agent";
 
 // Scale panel (P13). READ-ONLY surface of the permission model. It asserts the
 // structural fact that no autopilot door exists in this build and renders each
@@ -58,7 +59,11 @@ export default function ScalePanel() {
     <Card>
       <CardHeader
         title="Scale"
-        description={data ? `${data.planName} plan · default: ${data.defaultMode}` : "Permission model overview."}
+        description={
+          data
+            ? `${data.planName} plan · default: ${AGENT_MODE_LABEL[data.defaultMode as keyof typeof AGENT_MODE_LABEL] ?? data.defaultMode}`
+            : "Permission model overview."
+        }
       />
 
       {loading && <div className="h-4 w-3/4 animate-pulse rounded bg-neutral-100 px-5 py-6" />}
@@ -70,7 +75,10 @@ export default function ScalePanel() {
           <ul className="divide-y divide-theme-divider">
             {data.modes.map((m) => (
               <li key={m.mode} className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="text-sm font-medium capitalize">{m.mode}</span>
+                <span className="text-sm font-medium">
+                  {AGENT_MODE_LABEL[m.mode as keyof typeof AGENT_MODE_LABEL] ??
+                    m.mode.charAt(0).toUpperCase() + m.mode.slice(1)}
+                </span>
                 <span className="flex flex-wrap items-center gap-1.5 text-xs">
                   <span className={`badge ${m.canStrategize ? "bg-primary-100 text-primary-500" : "bg-neutral-200 text-neutral-500"}`}>
                     strategize

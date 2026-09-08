@@ -36,14 +36,20 @@ export type RunStatusView = (typeof RUN_STATUSES)[number];
 export default function AgentWorkspace({
   initialSources,
   defaultSourceId,
-  context
+  context,
+  initialGoal,
+  initialSourceId,
+  initialRunId
 }: {
   initialSources: AgentSource[];
   defaultSourceId: string | null;
   context: AgentContextData;
+  initialGoal?: string;
+  initialSourceId?: string;
+  initialRunId?: string;
 }) {
   const [sources] = useState<AgentSource[]>(initialSources);
-  const [runId, setRunId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [goals, setGoals] = useState<Record<string, string>>({});
@@ -97,13 +103,22 @@ export default function AgentWorkspace({
     }
   }
 
+  // A deep-linked source is honoured only when it's actually a ready source
+  // (done/failed); otherwise fall back to the newest ready source.
+  const effectiveDefaultSourceId =
+    initialSourceId &&
+    sources.some((s) => s.id === initialSourceId && (s.status === "done" || s.status === "failed"))
+      ? initialSourceId
+      : defaultSourceId;
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       {/* Left: what the agent knows + outcome-first composer + opportunities + history */}
       <div className="space-y-6">
         <OutcomeComposer
           sources={sources}
-          defaultSourceId={defaultSourceId}
+          defaultSourceId={effectiveDefaultSourceId}
+          initialGoal={initialGoal}
           busy={busy}
           error={error}
           onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}

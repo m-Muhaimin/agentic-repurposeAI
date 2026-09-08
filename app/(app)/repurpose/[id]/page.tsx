@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AppShell from "@/components/app-shell";
 import { Card } from "@/components/card";
 import StatusBadge from "@/components/status-badge";
 import OutputEditor from "@/components/output-editor";
+import Breadcrumbs from "@/components/breadcrumbs";
 
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
@@ -51,26 +50,13 @@ export default async function RepurposePage({ params }: { params: { id: string }
       : null;
 
   return (
-    <AppShell>
-      <div className="workspace py-8 lg:py-10">
-        <Link
-          href="/library"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-theme-text-secondary transition-colors hover:text-theme-text-primary"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-4"
-            aria-hidden="true"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back to content library
-        </Link>
+    <div className="workspace py-8 lg:py-10">
+        <Breadcrumbs
+          items={[
+            { label: "Content library", href: "/library" },
+            { label: source?.title ?? "Generated output" }
+          ]}
+        />
 
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-theme-divider px-6 py-5">
@@ -100,6 +86,5 @@ export default async function RepurposePage({ params }: { params: { id: string }
           <OutputEditor outputId={output.id} initialContent={output.content} />
         </Card>
       </div>
-    </AppShell>
   );
 }

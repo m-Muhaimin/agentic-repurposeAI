@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   BRAND_VOICE_KEY,
   FORMATS,
@@ -40,6 +41,47 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
   const [saved, setSaved] = useState<Record<PromptKey, string>>(() => ({ ...values }));
   const [saving, setSaving] = useState<PromptKey | null>(null);
   const [status, setStatus] = useState<{ key: PromptKey; value: Status } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [confirmAnalyze, setConfirmAnalyze] = useState(false);
+  const [analyzeStatus, setAnalyzeStatus] = useState<{ ok: boolean; text: string; needsContent?: boolean } | null>(
+    null
+  );
+
+  async function analyzeMyContent() {
+    setAnalyzing(true);
+    setAnalyzeStatus(null);
+    try {
+      const res = await fetch("/api/prompts/analyze-voice", { method: "POST" });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; code?: string; error?: string; voice?: string } | null;
+      if (!res.ok || !data) {
+        setAnalyzeStatus({ ok: false, text: data?.error ?? "Could not analyze your content. Try again." });
+        return;
+      }
+      if (data.code === "NOT_ENOUGH_DATA") {
+        setAnalyzeStatus({
+          ok: false,
+          needsContent: true,
+          text: "Not enough drafts yet to model your voice on — repurpose something first, then come back."
+        });
+        return;
+      }
+      const voice = typeof data.voice === "string" ? data.voice.trim() : "";
+      if (!voice) throw new Error("Analysis came back empty — try again.");
+      setValues((prev) => ({ ...prev, [BRAND_VOICE_KEY]: voice }));
+      setConfirmAnalyze(false);
+      setAnalyzeStatus({
+        ok: true,
+        text: "Voice drafted from your drafts — review it, then save if you like it."
+      });
+    } catch (err) {
+      setAnalyzeStatus({
+        ok: false,
+        text: err instanceof Error ? err.message : "Could not analyze your content. Try again."
+      });
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   const dirty = (k: PromptKey) => (values[k] ?? "") !== (saved[k] ?? "");
 
@@ -127,6 +169,60 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
             Describe your tone, personality, grammar, and the way you communicate. Layered on top of
             every draft.
           </p>
+          {confirmAnalyze ? (
+            <div className="mt-3 rounded-lg border border-primary-500/30 bg-primary-500/5 p-3">
+              <p className="text-xs text-theme-text-secondary">
+                This reads a few of your existing drafts and writes a voice description for you. It
+                never auto-saves — you review it before saving.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void analyzeMyContent()}
+                  disabled={analyzing}
+                  className="btn btn-primary btn-sm disabled:opacity-50"
+                >
+                  {analyzing ? "Analyzing your drafts…" : "Analyze my drafts"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmAnalyze(false)}
+                  disabled={analyzing}
+                  className="btn btn-sm disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmAnalyze(true);
+                setAnalyzeStatus(null);
+              }}
+              disabled={analyzing}
+              className="btn btn-outline-primary btn-sm mt-3 disabled:opacity-50"
+            >
+              {analyzing ? "Analyzing your drafts…" : "Draft my voice from my content"}
+            </button>
+          )}
+          {analyzeStatus && (
+            <p
+              className={`mt-2 text-xs ${analyzeStatus.ok ? "text-green-600" : "text-red-600"}`}
+              role={analyzeStatus.ok ? "status" : "alert"}
+            >
+              {analyzeStatus.text}
+              {analyzeStatus.needsContent && (
+                <>
+                  {" "}
+                  <Link href="/upload" className="underline underline-offset-2 hover:text-primary-700">
+                    Repurpose something
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <div className="px-5 py-4">
           <textarea
@@ -181,6 +277,15 @@ export default function BrandingForm({ initial }: { initial: UserPromptMap }) {
           {renderFooter(f as PromptKey)}
         </section>
       ))}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-theme-divider bg-theme-bg-paper px-5 py-4 lg:col-span-2">
+        <p className="text-sm text-theme-text-secondary">
+          Voice and output preferences are applied the moment a draft is generated.
+        </p>
+        <Link href="/agent" className="btn btn-outline-primary btn-sm shrink-0">
+          Try it — draft something →
+        </Link>
+      </div>
       </div>
     </div>
   );

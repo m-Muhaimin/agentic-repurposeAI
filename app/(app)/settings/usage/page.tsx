@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { resolvePlan } from "@/lib/billing/entitlements";
-import { getUsageSnapshot, maxInputSecondsFor } from "@/lib/billing/usage";
-import AppShell from "@/components/app-shell";
+import { getUsageSnapshot } from "@/lib/billing/usage";
 import PageHeader from "@/components/page-header";
+import Breadcrumbs from "@/components/breadcrumbs";
 import { Card, CardHeader } from "@/components/card";
 import { UsageMeter } from "@/components/usage-meter";
 
@@ -21,7 +21,6 @@ export default async function UsagePage() {
   const plan = await resolvePlan(user!.id);
   const usage = await getUsageSnapshot(user!.id, plan);
   const { jobsUsed: used, jobsLimit: limit, jobsRemaining: remaining } = usage;
-  const maxInputSeconds = maxInputSecondsFor(plan);
 
   let recentJobs: { title: string; date: string; formats: number }[] = [];
   try {
@@ -49,8 +48,8 @@ export default async function UsagePage() {
   }
 
   return (
-    <AppShell>
       <div className="workspace py-8 lg:py-10">
+        <Breadcrumbs items={[{ label: "Settings", href: "/settings" }, { label: "Plan & Usage" }]} />
         <PageHeader
           title="Plan &amp; Usage"
           description="Track your monthly content generation and plan limits."
@@ -114,10 +113,7 @@ export default async function UsagePage() {
               ))}
             </ul>
             <p className="mt-4 text-xs text-theme-text-secondary">
-              {limit === null ? "Unlimited" : `${limit}`} jobs / month · up to{" "}
-              {plan.limits.maxInputMinutes} minutes per recording · {plan.limits.maxOutputsPerJob}{" "}
-              outputs per job · {plan.limits.maxRegenerationsPerJob} regenerations per output.
-              ({maxInputSeconds} second hard cap on recordings.)
+              Repurpose jobs are budgeted per calendar month and reset automatically.
             </p>
           </Card>
         </div>
@@ -143,14 +139,13 @@ export default async function UsagePage() {
                     {job.title}
                   </span>
                   <span className="shrink-0 text-xs text-theme-text-secondary">
-                    {job.date} · {job.formats === 1 ? "1 job" : `${job.formats} formats`}
-                  </span>
+                  {job.date} · {job.formats} format{job.formats === 1 ? "" : "s"}
+                </span>
                 </li>
               ))}
             </ul>
           )}
         </Card>
       </div>
-    </AppShell>
   );
 }

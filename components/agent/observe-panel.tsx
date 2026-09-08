@@ -146,11 +146,10 @@ export default function ObservePanel() {
             {data.spend.runsThisMonth > 0 ? (
               <>
                 <p className="mt-1 text-xs text-theme-text-secondary">
-                  {data.spend.runsThisMonth} run{data.spend.runsThisMonth === 1 ? "" : "s"} this month ·{" "}
-                  {data.spend.totalInputTokens.toLocaleString()} input + {data.spend.totalOutputTokens.toLocaleString()} output tokens
+                  {data.spend.runsThisMonth} run{data.spend.runsThisMonth === 1 ? "" : "s"} this month
                 </p>
                 <p className="mt-0.5 text-xs text-theme-text-secondary">
-                  {data.estimatedCostUsd ?? "$0.00"} est. · <span className="italic">published-rate estimate from real token counts</span>
+                  {data.estimatedCostUsd ?? "$0.00"} est. · <span className="italic">published-rate estimate from real usage this month</span>
                 </p>
               </>
             ) : (
