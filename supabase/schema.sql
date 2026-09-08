@@ -10,7 +10,8 @@
 --   alter table public.sources drop constraint if exists source_has_location;
 --   alter table public.sources add constraint source_has_location check (
 --     (source_type = 'youtube' and source_url is not null)
---     or (source_type in ('audio', 'video', 'youtube', 'transcript') and storage_path is not null)
+--     or (source_type in ('audio', 'video') and storage_path is not null)
+--     or (source_type = 'transcript' and (storage_path is not null or source_url is not null))
 --   );
 --
 -- If you already ran an earlier version of the schema (before the jobs table),
@@ -142,7 +143,8 @@ create table if not exists public.sources (
   created_at timestamptz not null default now(),
   constraint source_has_location check (
     (source_type = 'youtube' and source_url is not null)
-    or (source_type in ('audio', 'video', 'transcript') and storage_path is not null)
+    or (source_type in ('audio', 'video') and storage_path is not null)
+    or (source_type = 'transcript' and (storage_path is not null or source_url is not null))
   )
 );
 

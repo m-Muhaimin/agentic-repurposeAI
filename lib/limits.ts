@@ -18,9 +18,11 @@ export const SOURCE_FILE_EXTENSIONS = [
   "mpg"
 ] as const;
 
-// Transcript sources: plain text or subtitle files, parsed by the transcript
-// ingestion provider instead of being transcribed.
-export const TRANSCRIPT_FILE_EXTENSIONS = ["txt", "srt", "vtt"] as const;
+// Transcript sources: plain text, subtitle, and document files, parsed by the
+// ingest adapters instead of being transcribed. txt/srt/vtt ride the transcript
+// provider; markdown extracts for real via the document adapter (both fold onto
+// the `transcript` source_type in the registry).
+export const TRANSCRIPT_FILE_EXTENSIONS = ["txt", "srt", "vtt", "md", "markdown"] as const;
 
 // Manual file uploads: soft cap is enforced client-side before upload and
 // server-side in the worker before any AssemblyAI/Gemini spend. YouTube path

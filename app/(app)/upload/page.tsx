@@ -18,7 +18,7 @@ import {
 import { getUsage, formatResetDate } from "@/lib/billing/usage-client";
 import type { ClientUsage } from "@/lib/billing/usage-client";
 import { UsageNotice, parseLimitBody } from "@/components/usage-meter";
-import AppShell from "@/components/app-shell";
+import PageHeader from "@/components/page-header";
 import SegmentedControl from "@/components/segmented-control";
 
 interface YoutubeVideo {
@@ -30,6 +30,7 @@ interface YoutubeVideo {
 
 const MODES = [
   { id: "file", label: "Upload media" },
+  { id: "link", label: "Paste a link" },
   { id: "youtube", label: "YouTube" },
   { id: "transcript", label: "Transcript" }
 ] as const;
@@ -41,8 +42,9 @@ const FORMATS = [
 ] as const;
 
 export default function UploadPage() {
-  const [mode, setMode] = useState<"file" | "youtube" | "transcript">("file");
+  const [mode, setMode] = useState<"file" | "link" | "youtube" | "transcript">("file");
   const [file, setFile] = useState<File | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [title, setTitle] = useState("");
   const [formats, setFormats] = useState<string[]>(FORMATS.map((f) => f.id));
@@ -249,6 +251,36 @@ export default function UploadPage() {
     return source.id as string;
   }
 
+  // Paste-any-link intake: YouTube links keep the existing youtube path, every
+  // other public http(s) link is stored as a `transcript` source located by
+  // source_url alone (migration …0003 relaxes source_has_location). The worker
+  // classifies the URL (web article / blog → fetch pipeline, podcast feed →
+  // RSS, supported social / unknown → honest error) and routes it to the right
+  // adapter through the ingestion registry.
+  async function handleLinkSubmit(userId: string) {
+    const trimmed = linkUrl.trim();
+    if (!/^https?:\/\/\S+/i.test(trimmed)) {
+      throw new Error(
+        "Enter a full http(s) link — an article, blog post, podcast feed, or YouTube video."
+      );
+    }
+
+    const sourceType = isValidYoutubeUrl(trimmed) ? "youtube" : "transcript";
+    const { data: source, error: insertError } = await supabase
+      .from("sources")
+      .insert({
+        user_id: userId,
+        title: title || trimmed,
+        source_url: trimmed,
+        source_type: sourceType
+      })
+      .select()
+      .single();
+    if (insertError) throw insertError;
+
+    return source.id as string;
+  }
+
   async function loadYoutubeStatus() {
     try {
       const status = await fetch("/api/integrations/youtube/status").then((r) => r.json());
@@ -306,9 +338,11 @@ export default function UploadPage() {
       const sourceId =
         mode === "file"
           ? await handleFileSubmit(user.id)
-          : mode === "transcript"
-            ? await handleTranscriptSubmit(user.id)
-            : await handleYoutubeSubmit(user.id);
+          : mode === "link"
+            ? await handleLinkSubmit(user.id)
+            : mode === "transcript"
+              ? await handleTranscriptSubmit(user.id)
+              : await handleYoutubeSubmit(user.id);
 
       if (!sourceId) throw new Error("Could not create source.");
 
@@ -325,15 +359,13 @@ export default function UploadPage() {
   }
 
   return (
-    <AppShell>
       <div className="workspace flex justify-center py-8 lg:py-12">
         <div className="w-full max-w-xl">
           <div className="rounded-lg border border-theme-divider bg-theme-bg-paper p-6 sm:p-8">
-            <h1 className="font-display text-2xl font-bold">Create content from your next recording</h1>
-            <p className="mt-1 text-sm text-theme-text-secondary">
-              Upload audio or video, add a transcript, or connect a YouTube video. RepurposeAI will
-              turn it into ready-to-edit drafts.
-            </p>
+            <PageHeader
+            title="Create content from your next recording"
+            description="Upload audio or video, add a transcript, or connect a YouTube video. RepurposeAI will turn it into ready-to-edit drafts."
+          />
 
             <SegmentedControl
               ariaLabel="Choose how to bring in your content"
@@ -383,6 +415,26 @@ export default function UploadPage() {
                     Drop an audio or video file — up to {MAX_SOURCE_FILE_MB} MB ({SOURCE_FILE_EXTENSIONS.join(", ")}).
                   </p>
                 </div>
+              ) : mode === "link" ? (
+                <div>
+                  <label htmlFor="linkUrl" className="form-label">
+                    Link
+                  </label>
+                  <input
+                    id="linkUrl"
+                    type="url"
+                    required
+                    placeholder="https://example.com/article, /rss/feed, or youtube.com/watch?v=..."
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    className="form-control"
+                  />
+                  <p className="mt-2 text-xs text-theme-text-secondary">
+                    Paste any public link — a web article or blog post is read straight from the
+                    page, a podcast feed pulls its episodes, and a YouTube link uses the usual
+                    captions or audio path.
+                  </p>
+                </div>
               ) : mode === "transcript" ? (
                 <div>
                   <label htmlFor="transcriptFile" className="form-label">
@@ -391,16 +443,17 @@ export default function UploadPage() {
                   <input
                     id="transcriptFile"
                     type="file"
-                    accept=".txt,.srt,.vtt,text/plain,text/vtt"
+                    accept=".txt,.srt,.vtt,.md,.markdown,text/plain,text/markdown,text/vtt"
                     required
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     className="form-control"
                   />
                   <p className="mt-2 text-xs text-theme-text-secondary">
-                    Provide your own transcript or captions — {TRANSCRIPT_FILE_EXTENSIONS.join(", ")}.
+                    Provide your own transcript, captions, or a Markdown document —{" "}
+                    {TRANSCRIPT_FILE_EXTENSIONS.join(", ")}.
                     Subtitle files ({TRANSCRIPT_FILE_EXTENSIONS.filter((e) => e !== "txt").join(", ")})
-                    keep their timestamps; a plain .txt works too and skips the transcription step
-                    entirely.
+                    keep their timestamps; a plain .txt, .md or .markdown works too and skips the
+                    transcription step entirely.
                   </p>
                 </div>
               ) : (
@@ -524,7 +577,7 @@ export default function UploadPage() {
                   busy ||
                   usage?.atLimit ||
                   formats.length === 0 ||
-                  (mode === "youtube" ? !youtubeUrl : !file)
+                  (mode === "youtube" ? !youtubeUrl : mode === "link" ? !linkUrl : !file)
                 }
                 className="btn btn-primary w-full disabled:opacity-50"
               >
@@ -543,6 +596,5 @@ export default function UploadPage() {
           </div>
         </div>
       </div>
-    </AppShell>
   );
 }

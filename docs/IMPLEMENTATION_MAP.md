@@ -373,3 +373,41 @@ Verified understanding of the six audit axes:
   (24), verify-agentic.mjs (38), build-before-tsc, CI pipeline.
 
 Report + map saved to `docs/IMPLEMENTATION_MAP.md`. Ready for Phase 1.
+
+---
+
+## Phase 1 — canonical source architecture (delivered)
+
+Landing the uncommitted ingestion foundation (committed as the universal
+ingestion baseline: `lib/ingestion/` registry + adapters + idempotency +
+evidence + tests, `(app)` route group, migration `20260908000002`) and the
+first real intake slice on top of it:
+
+### Wire-up status
+- The worker (`app/api/process/route.ts`) **already** routes every job through
+  `ingestSource()` → the registry → the right adapter. The seam was the missing
+  UI, not the worker.
+- **New "Paste a link" mode** (`app/(app)/upload/page.tsx`): any public http(s)
+  link becomes a source. YouTube links keep the existing `youtube` source_type
+  and captions/audio path; everything else is stored as a `transcript` row
+  located by `source_url` alone, and the worker classifies it at ingest time
+  (web article/blog → fetch pipeline, podcast feed → RSS, supported-social /
+  unknown → honest actionable error via `IngestionFailure`).
+- **Markdown intake**: `.md` / `.markdown` added to the transcript file picker
+  + `TRANSCRIPT_FILE_EXTENSIONS` (`lib/limits.ts`); the registry resolves the
+  stored file to the `markdown` kind and the document adapter extracts it for
+  real (`extractMarkdown`).
+- **Migration `20260908000003_url_source_locations.sql`**: relaxes
+  `source_has_location` so a `transcript` row may be backed by `source_url`
+  alone (web article / podcast feed). Idempotent (guarded drop + recreate);
+  `supabase/schema.sql` reference kept in sync.
+
+### Not yet wired (honest seams, next phases)
+- PDF / DOCX / image extractors default to "not wired up yet" failures — no
+  fabricated content. Wiring them (pdf-parse, mammoth, an OCR/vision pass) is
+  Phase 2 work and is what lights up the corresponding upload UI.
+- Idempotency store (`ContentStore`) is not injected in the worker yet — the
+  `content_hash` column + unique index exist (…0002) but dedupe-on-ingest
+  activates once the worker passes a store-backed adapter.
+- `verify:rls` / `verify:agentic` and live migrations …0002/…0003 still need
+  a run against the live project (DB creds not in the repo).
