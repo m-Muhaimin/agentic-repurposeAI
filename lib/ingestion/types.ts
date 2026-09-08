@@ -7,8 +7,15 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import type { ExtractedStructure, ExtractedMetadata } from "./extract";
 
 export type IngestionSourceType = "youtube" | "audio" | "video" | "transcript";
+
+// Canonical content: the source-agnostic artifact every intake mechanism
+// produces and every downstream consumer reads. Kept as a named alias of
+// TranscriptDocument so new code can speak in the canonical vocabulary without
+// changing the shape the worker already persists.
+export type CanonicalContent = TranscriptDocument;
 
 // Structural view of a `sources` row that ingestion providers depend on — kept
 // deliberately minimal so providers don't reach into the rest of the row.
@@ -37,6 +44,12 @@ export interface TranscriptDocument {
   // underlying transcript record (AssemblyAI transcript id, YouTube caption id).
   provider?: string;
   providerTranscriptId?: string;
+  // Phase 2: document kinds carry parallel structure + extraction metadata so a
+  // PDF/DOCX/Markdown/image isn't flattened to a bare text blob. Both are
+  // optional and downstream (saveTranscript, generation, evidence) is
+  // unchanged when absent.
+  structure?: ExtractedStructure;
+  metadata?: ExtractedMetadata;
   source: {
     type: IngestionSourceType;
     url?: string;

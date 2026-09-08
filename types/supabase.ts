@@ -16,7 +16,7 @@ export type Database = {
     };
     Tables: {
       sources: {
-        Row: { id: string; user_id: string; title: string; storage_path: string | null; source_url: string | null; source_type: "audio" | "video" | "youtube" | "transcript"; status: "uploaded"|"transcribing"|"transcribed"|"generating"|"done"|"failed"; transcript: string | null; error_message: string | null; duration_seconds: number | null; created_at: string };
+        Row: { id: string; user_id: string; title: string; storage_path: string | null; source_url: string | null; source_type: "audio" | "video" | "youtube" | "transcript"; status: "uploaded"|"transcribing"|"transcribed"|"generating"|"done"|"failed"; transcript: string | null; error_message: string | null; duration_seconds: number | null; content_hash: string | null; created_at: string };
         Insert: Partial<Database["public"]["Tables"]["sources"]["Row"]> & { user_id: string; title: string; source_type: "audio" | "video" | "youtube" | "transcript" };
         Update: Partial<Database["public"]["Tables"]["sources"]["Row"]>;
         Relationships: [];

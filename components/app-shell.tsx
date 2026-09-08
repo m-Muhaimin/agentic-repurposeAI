@@ -5,8 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "./logo";
+import CreateMenu from "./create-menu";
 
-const NAV_GROUPS = [
+type NavGroup = {
+  label: string;
+  items: { label: string; href: string; icon: React.ReactNode }[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
   {
     label: "Home",
     items: [
@@ -245,6 +251,23 @@ const NAV_GROUPS = [
   }
 ];
 
+const NAV_HREFS = NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
+
+// Longest prefix wins, so `/settings/usage` keeps "Plan & usage" active while
+// "Settings" stays active only on its exact page. Subtree routes that aren't
+// nav entries map back to their parent — the editor (`/repurpose/*`) resolves
+// to Content library — so the user never loses orientation.
+function resolveActiveHref(pathname: string): string {
+  if (pathname.startsWith("/repurpose/")) return "/library";
+  let best: string | null = null;
+  for (const href of NAV_HREFS) {
+    if (pathname === href || pathname.startsWith(`${href}/`)) {
+      if (best === null || href.length > best.length) best = href;
+    }
+  }
+  return best ?? "";
+}
+
 function NavLinks({
   isActive,
   onNavigate
@@ -281,11 +304,13 @@ function SidebarContent({
   isActive,
   onNavigate,
   onClose,
+  createMenu,
   topBarRight
 }: {
   isActive: (href: string) => boolean;
   onNavigate?: () => void;
   onClose?: () => void;
+  createMenu?: React.ReactNode;
   topBarRight?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -303,6 +328,8 @@ function SidebarContent({
         <Logo href="/dashboard" />
         {topBarRight}
       </div>
+
+      {createMenu && <div className="px-4 pb-1 pt-4">{createMenu}</div>}
 
       <nav className="flex flex-1 flex-col gap-1 px-4 py-2">
         <NavLinks isActive={isActive} onNavigate={onNavigate} />
@@ -350,7 +377,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isActive = (href: string) => pathname === href;
+  const activeHref = resolveActiveHref(pathname);
+  const isActive = (href: string) => href === activeHref;
 
   // Close the drawer on route change.
   useEffect(() => {
@@ -379,34 +407,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-neutral-50 lg:flex">
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-theme-divider bg-theme-bg-paper lg:flex">
-        <SidebarContent isActive={isActive} />
+        <SidebarContent isActive={isActive} createMenu={<CreateMenu />} />
       </aside>
 
       {/* Mobile top bar */}
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-theme-divider bg-theme-bg-paper px-4 py-3 lg:hidden">
           <span className="text-lg font-bold text-theme-text-primary">Repurpose</span>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="nav-link"
-            aria-label="Open menu"
-            aria-expanded={sidebarOpen}
-            aria-controls="mobile-sidebar"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-5"
-              aria-hidden="true"
+          <div className="flex items-center gap-2">
+            <CreateMenu variant="topbar" />
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="nav-link"
+              aria-label="Open menu"
+              aria-expanded={sidebarOpen}
+              aria-controls="mobile-sidebar"
             >
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-5"
+                aria-hidden="true"
+              >
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         <main className="flex-1">{children}</main>
