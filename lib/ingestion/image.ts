@@ -13,7 +13,7 @@ import type { IngestionProvider, IngestValidation } from "./registry";
 import type { ContentExtractor } from "./extract";
 import { makeImageExtractor } from "./extract";
 import { toCanonicalContent, ensureMeaningful } from "./normalize";
-import { findReusableSource, contentHash, type ContentStore } from "./idempotency";
+import { findReusableSource, contentHash, persistHashSafely, type ContentStore } from "./idempotency";
 import { readAndValidateFile } from "./file-gate";
 import { ingestionFailure } from "./failure";
 import { validateFile, type FileBackedKind } from "./kinds";
@@ -51,9 +51,9 @@ export function imageProvider(opts: ImageProviderOptions = {}): IngestionProvide
         });
       }
       const gated = await readAndValidateFile(ctx, source.storage_path ?? "");
+      const hash = opts.store ? contentHash(gated.bytes) : null;
 
-      if (opts.store) {
-        const hash = contentHash(gated.bytes);
+      if (opts.store && hash) {
         const reuse = await findReusableSource(opts.store, source, KIND, hash);
         if (reuse) {
           ctx.onProgress?.("Reusing existing content", 90);
@@ -91,6 +91,7 @@ export function imageProvider(opts: ImageProviderOptions = {}): IngestionProvide
       }
 
       ctx.onProgress?.("Ready", 100);
+      if (opts.store && hash) await persistHashSafely(opts.store, source.id, hash);
       return ensureMeaningful(toCanonicalContent(extracted, source, { provider: "transcript_file" }));
     },
     normalize: ensureMeaningful

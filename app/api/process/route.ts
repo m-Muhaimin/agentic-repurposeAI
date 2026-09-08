@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { ingestSource, saveTranscript, type IngestionContext } from "@/lib/ingestion";
+import { supabaseContentStore, registerStoreBackedProviders } from "@/lib/ingestion/store";
 import { generateOutput, type OutputFormat } from "@/lib/ai/generate";
 import { buildSystemPrompt } from "@/lib/ai/prompts";
 import { getUserPrompts, type UserPromptMap } from "@/lib/prompts";
@@ -69,6 +70,12 @@ export async function POST(request: Request) {
     data: { user }
   } = await supabase.auth.getUser();
   const service = createServiceClient();
+
+  // Phase 3: wire the live idempotency store into the file/url providers before
+  // ingesting — identical bytes/URL for the same user + kind reuse the earlier
+  // transcript (key persisted on sources.content_hash, unique per user+type+key
+  // via migration …0002). Re-registration is last-wins and cheap per request.
+  registerStoreBackedProviders(supabaseContentStore(service));
 
   const { data: existing } = await service
     .from("jobs")

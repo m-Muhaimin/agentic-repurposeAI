@@ -20,7 +20,7 @@ import type { IngestionProvider, IngestValidation } from "./registry";
 import type { ContentExtractor } from "./extract";
 import { makePdfExtractor, makeDocxExtractor, extractMarkdown } from "./extract";
 import { toCanonicalContent, ensureMeaningful } from "./normalize";
-import { findReusableSource, contentHash, type ContentStore } from "./idempotency";
+import { findReusableSource, contentHash, persistHashSafely, type ContentStore } from "./idempotency";
 import { readAndValidateFile } from "./file-gate";
 import { ingestionFailure, isIngestionFailure, toFailReason } from "./failure";
 
@@ -66,9 +66,9 @@ export function documentProvider(opts: DocumentProviderOptions = {}): IngestionP
         });
       }
       const gated = await readAndValidateFile(ctx, source.storage_path ?? "", { textOnly: kind === "markdown" });
+      const hash = opts.store ? contentHash(gated.bytes) : null;
 
-      if (opts.store) {
-        const hash = contentHash(gated.bytes);
+      if (opts.store && hash) {
         const reuse = await findReusableSource(opts.store, source, kind, hash);
         if (reuse) {
           ctx.onProgress?.("Reusing existing content", 90);
@@ -100,6 +100,7 @@ export function documentProvider(opts: DocumentProviderOptions = {}): IngestionP
         });
       }
       ctx.onProgress?.("Ready", 100);
+      if (opts.store && hash) await persistHashSafely(opts.store, source.id, hash);
       return ensureMeaningful(toCanonicalContent(extracted, source, { provider: "transcript_file" }));
     },
     normalize: ensureMeaningful

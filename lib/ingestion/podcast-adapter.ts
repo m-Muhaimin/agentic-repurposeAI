@@ -15,7 +15,7 @@ import { validateUrl } from "./url-validate";
 import { fetchUrl, feedContentType, htmlContentType, type HttpOptions } from "./url-fetch";
 import { parseRssFeed, selectEpisode, type PodcastFeed, type PodcastEpisode } from "./podcast-rss";
 import { ingestionFailure } from "./failure";
-import { contentHash, findReusableSource, idempotencyKey, type ContentStore } from "./idempotency";
+import { contentHash, findReusableSource, idempotencyKey, persistHashSafely, type ContentStore } from "./idempotency";
 import type { IngestSource, IngestionContext, TranscriptDocument } from "./types";
 import type { IngestionProvider, IngestValidation, SourceKind } from "./registry";
 
@@ -121,6 +121,10 @@ export async function ingestPodcastFeed(
 
   const text = chooseEpisodeText(episode, feed);
   ctx.onProgress?.("Ready", 100);
+  if (opts.store) {
+    const hash = contentHash(new TextEncoder().encode(validation.normalized ?? feedUrl));
+    await persistHashSafely(opts.store, source.id, hash);
+  }
 
   const doc: TranscriptDocument = {
     text,

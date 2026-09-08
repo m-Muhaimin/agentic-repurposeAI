@@ -16,7 +16,7 @@ import { htmlToReadable, type ReadableContent } from "./html-readable";
 import { ingestYouTube } from "./youtube";
 import { ingestPodcastFeed } from "./podcast-adapter";
 import { ingestionFailure, isIngestionFailure } from "./failure";
-import { contentHash, findReusableSource, type ContentStore } from "./idempotency";
+import { contentHash, findReusableSource, persistHashSafely, type ContentStore } from "./idempotency";
 import type { IngestSource, IngestionContext, TranscriptDocument } from "./types";
 import type { IngestionProvider, IngestValidation, SourceKind } from "./registry";
 
@@ -100,7 +100,7 @@ export async function ingestWebUrl(
     });
   }
 
-  if (opts.store) {
+if (opts.store) {
     const hash = contentHash(new TextEncoder().encode(validation.normalized ?? raw));
     const reuse = await findReusableSource(opts.store, source, KIND, hash);
     if (reuse) {
@@ -120,6 +120,10 @@ export async function ingestWebUrl(
   }
 
   ctx.onProgress?.("Ready", 100);
+  if (opts.store) {
+    const hash = contentHash(new TextEncoder().encode(validation.normalized ?? raw));
+    await persistHashSafely(opts.store, source.id, hash);
+  }
   const title = readable.title ?? source.title ?? null;
   const doc: TranscriptDocument = {
     text,

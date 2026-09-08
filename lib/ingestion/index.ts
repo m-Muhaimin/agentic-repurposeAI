@@ -64,6 +64,7 @@ import {
   contentHash,
   idempotencyKey,
   findReusableSource,
+  persistHashSafely,
   type ContentStore,
   type ReuseResult
 } from "./idempotency";
@@ -181,6 +182,7 @@ export {
   contentHash,
   idempotencyKey,
   findReusableSource,
+  persistHashSafely,
   validateFile,
   resolveFileKind,
   kindForExtension,
@@ -273,7 +275,10 @@ registerIngestionProvider({ sourceTypes: ["audio", "video"], kinds: ["audio", "v
 registerIngestionProvider(textFileProvider());
 // Phase 2: the file-backed adapters get their real engines — PDF via pdf-parse,
 // DOCX via mammoth, images via Gemini vision. Extraction failures stay honest
-// (the adapters' ensureMeaningful guard rejects empty/unsupported content).
+// (the adapters' ensureMeaningful guard rejects empty/unsupported content). The
+// idempotency `store` is NOT wired at module load (this module must stay free of
+// server/env coupling): the worker injects a store-backed re-registration via
+// registerStoreBackedProviders() from ./store before it ingests.
 registerIngestionProvider(documentProvider({ extractors: { pdf: pdfExtractor, docx: docxExtractor } }));
 registerIngestionProvider(imageProvider({ extractor: imageExtractor }));
 // Phase 3: URL + podcast intake. Both dispatch on URL content (kind 'url' /
@@ -282,3 +287,9 @@ registerIngestionProvider(imageProvider({ extractor: imageExtractor }));
 // source_has_location, so these light up for stored rows that carry one.
 registerIngestionProvider(urlProvider());
 registerIngestionProvider(podcastProvider());
+
+// Store-backed registry upgrade + live store, for reuse and tests. The worker
+// calls registerStoreBackedProviders(supabaseContentStore(service)) per request;
+// the pure module-load defaults stay store-free so ingestion stays testable and
+// server/env-coupling-free at import time.
+export { supabaseContentStore, registerStoreBackedProviders } from "./store";

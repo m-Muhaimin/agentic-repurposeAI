@@ -30,6 +30,21 @@ export interface ContentStore {
     excludeSourceId?: string
   ): Promise<IngestSource | null>;
   transcriptTextFor(sourceId: string): Promise<string | null>;
+  // Persist the computed idempotency key onto a source row so a future ingest of
+  // the same bytes/URL can find it. Optional: a store that can't write (or a
+  // quick unit fake) just skips write-back — the dedupe is a nicety.
+  persistHash?(sourceId: string, key: string): Promise<void>;
+}
+
+// Fire-and-forget key persistence for adapters: no-op when the store has no
+// write seam, and never fails the job the way a real dedupe-write hiccup could.
+export async function persistHashSafely(store: ContentStore | undefined, sourceId: string, key: string): Promise<void> {
+  if (!store?.persistHash) return;
+  try {
+    await store.persistHash(sourceId, key);
+  } catch {
+    // Dedupe bookkeeping must never fail ingestion.
+  }
 }
 
 export interface ReuseResult {
