@@ -21,7 +21,6 @@ import { getUsage, formatResetDate } from "@/lib/billing/usage-client";
 import type { ClientUsage } from "@/lib/billing/usage-client";
 import { UsageNotice, parseLimitBody } from "@/components/usage-meter";
 import PageHeader from "@/components/page-header";
-import SegmentedControl from "@/components/segmented-control";
 
 interface YoutubeVideo {
   videoId: string;
@@ -407,15 +406,30 @@ export default function UploadPage() {
             description="Upload audio or video, add a transcript, or connect a YouTube video. VervAI will turn it into ready-to-edit drafts."
             />
 
-            <SegmentedControl
-              ariaLabel="Choose how to bring in your content"
-              value={mode}
-              onChange={setMode}
-              variant="solid"
-              containerClassName="mt-6"
-              segmentClassName="flex-1"
-              options={[...MODES]}
-            />
+            <div
+              role="group"
+              aria-label="Choose how to bring in your content"
+              className="mt-6 flex flex-col gap-2 lg:flex-row lg:gap-0 lg:rounded-lg lg:bg-neutral-100 lg:p-1.5"
+            >
+              {MODES.map((m) => {
+                const active = mode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setMode(m.id)}
+                    className={`flex min-h-[44px] w-full items-center rounded-lg px-4 py-3 text-left text-sm font-medium transition-colors lg:w-auto lg:justify-center lg:py-2.5 ${
+                      active
+                        ? "bg-primary-500 font-semibold text-white"
+                        : "border border-theme-divider bg-theme-bg-paper text-theme-text-secondary lg:border-0 lg:bg-transparent hover:bg-primary-500/5 hover:text-theme-text-primary"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
 
             <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
               <UsageNotice usage={usage} />

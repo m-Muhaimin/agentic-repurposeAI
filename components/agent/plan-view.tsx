@@ -95,50 +95,23 @@ export default function PlanView({
           const quotes = idea.quotes ?? [];
           return (
             <li key={idea.id} className="px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`badge ${
-                      tag.tone === "high"
-                        ? "bg-amber-50 text-amber-700"
-                        : tag.tone === "strong"
-                          ? "bg-primary-100 text-primary-500"
-                          : "bg-neutral-100 text-neutral-500"
-                    }`}
-                  >
-                    {tag.label}
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`badge ${
+                    tag.tone === "high"
+                      ? "bg-amber-50 text-amber-700"
+                      : tag.tone === "strong"
+                        ? "bg-primary-100 text-primary-500"
+                        : "bg-neutral-100 text-neutral-500"
+                  }`}
+                >
+                  {tag.label}
+                </span>
+                {typeof idea.evaluation?.score === "number" && (
+                  <span className="text-xs text-theme-text-secondary">
+                    {Math.round(idea.evaluation.score * 100)}% fit with your content
                   </span>
-                  {typeof idea.evaluation?.score === "number" && (
-                    <span className="text-xs text-theme-text-secondary">
-                      {Math.round(idea.evaluation.score * 100)}% fit with your content
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleEdit(idea)}
-                    className={`text-xs font-medium ${editing[idea.id] ? "text-theme-text-primary" : "text-theme-text-secondary hover:text-theme-text-primary"}`}
-                  >
-                    {editing[idea.id] ? "Editing…" : "Edit"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => decide(idea, true)}
-                    className={`btn px-2 py-1 text-xs ${checks[idea.id] ? "btn-primary" : ""}`}
-                    aria-pressed={Boolean(checks[idea.id])}
-                  >
-                    Keep
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => decide(idea, false)}
-                    className={`text-xs font-medium ${!checks[idea.id] ? "text-theme-text-primary" : "text-theme-text-secondary hover:text-theme-text-primary"}`}
-                    aria-pressed={!checks[idea.id]}
-                  >
-                    Skip
-                  </button>
-                </div>
+                )}
               </div>
 
               {editing[idea.id] ? (
@@ -191,6 +164,32 @@ export default function PlanView({
               {idea.evaluation?.weakness && (
                 <p className="mt-2 text-xs text-amber-600">{idea.evaluation.weakness}</p>
               )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-theme-divider pt-3">
+                <button
+                  type="button"
+                  onClick={() => toggleEdit(idea)}
+                  className={`text-xs font-medium ${editing[idea.id] ? "text-theme-text-primary" : "text-theme-text-secondary hover:text-theme-text-primary"}`}
+                >
+                  {editing[idea.id] ? "Editing…" : "Edit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => decide(idea, true)}
+                  className={`btn px-3 py-1.5 text-xs ${checks[idea.id] ? "btn-light-primary" : "btn-outline-primary"}`}
+                  aria-pressed={Boolean(checks[idea.id])}
+                >
+                  Keep
+                </button>
+                <button
+                  type="button"
+                  onClick={() => decide(idea, false)}
+                  className={`text-xs font-medium ${!checks[idea.id] ? "text-theme-text-primary" : "text-theme-text-secondary hover:text-theme-text-primary"}`}
+                  aria-pressed={!checks[idea.id]}
+                >
+                  Skip
+                </button>
+              </div>
             </li>
           );
         })}

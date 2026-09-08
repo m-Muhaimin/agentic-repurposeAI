@@ -255,7 +255,7 @@ export default async function OverviewPage() {
               title="Performance"
               description="A compact snapshot of your content system."
             />
-            <div className="grid grid-cols-2 gap-5 p-5">
+            <div className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2">
               <MiniStat label="Content pieces" value={contentPieces} />
               <MiniStat label="Drafts created" value={drafts} />
               <MiniStat label="In progress" value={inProgress} />

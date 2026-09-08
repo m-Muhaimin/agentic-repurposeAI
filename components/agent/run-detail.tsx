@@ -5,8 +5,10 @@ import { Card, CardHeader } from "@/components/card";
 import type { AgentRunRow, ContentIdea, EditSignal, RunStatus } from "@/types/agent";
 import { stepSpendFromOutput, aggregateRunSpend, formatCostUsd, formatCostUnits, spendSourceLabel, type MonthlyAgentSpend, type StepSpend } from "@/lib/agent/spend";
 import { budgetSummaryLine } from "@/lib/agent/plan-presentation";
+import { AGENT_STATUS_LABEL, AGENT_STATUS_STYLE } from "@/lib/status";
 import PlanView from "./plan-view";
 import Timeline from "./timeline";
+import AgentProgressDots from "./progress-dots";
 
 // Pulls the full durable snapshot for one run and drives the stage machine
 // from the UI: reads the plan → approve/reject → kick the execution worker →
@@ -184,6 +186,13 @@ export default function RunDetail({
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <AgentProgressDots status={run.status} />
+        <span className={`badge ${AGENT_STATUS_STYLE[run.status] ?? "bg-neutral-100 text-neutral-700"}`}>
+          {AGENT_STATUS_LABEL[run.status] ?? run.status}
+        </span>
+      </div>
 
       {goal && (
         <p className="text-xs text-theme-text-secondary">
