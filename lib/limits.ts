@@ -24,6 +24,30 @@ export const SOURCE_FILE_EXTENSIONS = [
 // the `transcript` source_type in the registry).
 export const TRANSCRIPT_FILE_EXTENSIONS = ["txt", "srt", "vtt", "md", "markdown"] as const;
 
+// Document + image intake (Phase 2): PDF/DOCX and image files ride the same
+// `transcript` source_type, dispatched to the document/image adapters by kind.
+// pdf-parse, mammoth and Gemini vision are the wired extraction engines.
+export const DOCUMENT_FILE_EXTENSIONS = ["pdf", "docx"] as const;
+export const IMAGE_FILE_EXTENSIONS = [
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "heic",
+  "heif",
+  "avif"
+] as const;
+
+// Everything the transcript-mode picker accepts (client hint; the server's
+// kinds.validateFile is authoritative).
+export const FILE_BACKED_EXTENSIONS = [
+  ...TRANSCRIPT_FILE_EXTENSIONS,
+  ...DOCUMENT_FILE_EXTENSIONS,
+  ...IMAGE_FILE_EXTENSIONS
+] as const;
+
 // Manual file uploads: soft cap is enforced client-side before upload and
 // server-side in the worker before any AssemblyAI/Gemini spend. YouTube path
 // uses the same cap on the pulled mp3.
@@ -69,6 +93,18 @@ export function isAllowedSourceExtension(name: string): boolean {
 
 export function isAllowedTranscriptExtension(name: string): boolean {
   return (TRANSCRIPT_FILE_EXTENSIONS as readonly string[]).includes(fileExtension(name));
+}
+
+export function isAllowedDocumentExtension(name: string): boolean {
+  return (DOCUMENT_FILE_EXTENSIONS as readonly string[]).includes(fileExtension(name));
+}
+
+export function isAllowedImageExtension(name: string): boolean {
+  return (IMAGE_FILE_EXTENSIONS as readonly string[]).includes(fileExtension(name));
+}
+
+export function isAllowedFileBackedExtension(name: string): boolean {
+  return (FILE_BACKED_EXTENSIONS as readonly string[]).includes(fileExtension(name));
 }
 
 export function isAllowedSourceMime(mime: string | null | undefined): boolean {

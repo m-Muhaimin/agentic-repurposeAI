@@ -19,6 +19,7 @@ import { ingestTranscript } from "./transcript";
 import { documentProvider } from "./document";
 import { imageProvider } from "./image";
 import { textFileProvider } from "./text-file";
+import { pdfExtractor, docxExtractor, imageExtractor, createImageExtractor } from "./engines";
 import { urlProvider, ingestWebUrl, type UrlProviderOptions, type UrlExtractor } from "./url-adapter";
 import { podcastProvider, ingestPodcastFeed, type PodcastProviderOptions } from "./podcast-adapter";
 import { saveTranscript } from "./save";
@@ -135,6 +136,15 @@ import {
   type ContentBlock,
   type ContentBlockType
 } from "./extract";
+export {
+  pdfExtractor,
+  docxExtractor,
+  imageExtractor,
+  createImageExtractor,
+  parseImageAnalysis,
+  imageTextFromAnalysis
+} from "./engines";
+export type { ImageAnalysis } from "./engines";
 
 export type {
   IngestSource,
@@ -261,8 +271,11 @@ registerIngestionProvider({ sourceTypes: ["audio", "video"], kinds: ["audio", "v
 // share source_type 'transcript' (first-wins in the registry keeps the
 // original provider as the type default; kind dispatch does the real routing).
 registerIngestionProvider(textFileProvider());
-registerIngestionProvider(documentProvider());
-registerIngestionProvider(imageProvider());
+// Phase 2: the file-backed adapters get their real engines — PDF via pdf-parse,
+// DOCX via mammoth, images via Gemini vision. Extraction failures stay honest
+// (the adapters' ensureMeaningful guard rejects empty/unsupported content).
+registerIngestionProvider(documentProvider({ extractors: { pdf: pdfExtractor, docx: docxExtractor } }));
+registerIngestionProvider(imageProvider({ extractor: imageExtractor }));
 // Phase 3: URL + podcast intake. Both dispatch on URL content (kind 'url' /
 // 'podcast') and have no DB source_type of their own yet — the schema can't
 // persist a location-less URL row until a future migration relaxes

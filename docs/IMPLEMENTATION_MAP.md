@@ -403,11 +403,48 @@ first real intake slice on top of it:
   `supabase/schema.sql` reference kept in sync.
 
 ### Not yet wired (honest seams, next phases)
-- PDF / DOCX / image extractors default to "not wired up yet" failures — no
-  fabricated content. Wiring them (pdf-parse, mammoth, an OCR/vision pass) is
-  Phase 2 work and is what lights up the corresponding upload UI.
 - Idempotency store (`ContentStore`) is not injected in the worker yet — the
   `content_hash` column + unique index exist (…0002) but dedupe-on-ingest
   activates once the worker passes a store-backed adapter.
+
+---
+
+## Phase 2 — file extraction engines (delivered)
+
+Wired real extraction for every file-backed intake kind. No content is
+fabricated; empty results are rejected honestly by the adapters' guard.
+
+- **`lib/ingestion/engines.ts`** (server-only): 
+  - `pdfExtractor` — **pdf-parse** text extraction. Imports
+    `pdf-parse/lib/pdf-parse.js` (the package root runs a debug self-test whose
+    `module.parent` guard is falsy under vite-node/ESM transforms, crashing on a
+    missing `test/data/*.pdf` fixture). NUL bytes that pdf-parse emits are
+    stripped before canonical shaping; `metadata.pages` from `numpages`.
+  - `docxExtractor` — **mammoth** `extractRawText`.
+  - `imageExtractor` / `createImageExtractor` — Gemini vision (`gemini-3.6-flash`)
+    via a deterministic prompt returning three grounded sections (Visible text /
+    Description / Key messages). `parseImageAnalysis` + `imageTextFromAnalysis`
+    shape the answer; a `NONE` marker is treated as "nothing visible", never
+    content. The model is built lazily on first call, so importing engines never
+    requires `GEMINI_API_KEY`. `retryOnOverload` wraps the vision call.
+- **`types/ingestion-engines.d.ts`** — local ambient declarations for
+  `pdf-parse` and `mammoth` (neither ships types), since the server-only module
+  stays dependency-free of DefinitelyTyped.
+- **`lib/ingestion/index.ts`** — providers now wire the real engines:
+  `documentProvider({ extractors: { pdf, docx } })`, `imageProvider({ extractor })`.
+  Engines re-exported for reuse.
+- **`lib/limits.ts`** — `DOCUMENT_FILE_EXTENSIONS` (pdf, docx),
+  `IMAGE_FILE_EXTENSIONS` (png/jpg/jpeg/gif/webp/bmp/heic/heif/avif),
+  `FILE_BACKED_EXTENSIONS` + `isAllowedFileBackedExtension`.
+- **`app/(app)/upload/page.tsx`** — transcript-mode picker now also accepts
+  documents + images (`accept` list + validation moved to the file-backed gate).
+- **Deps**: `pdf-parse`, `mammoth`.
+- **Tests**: `lib/ingestion/engines.test.ts` (analysis parsing, canonical text
+  assembly, engine-contract wiring, lazy key deferral). 351 tests / 36 files
+  green, `tsc --noEmit` clean, `npm run build` exit 0.
+
+Next step (Phase 3): inject a store-backed `ContentStore` into the registered
+providers for real dedupe, and light up/polish the URL + podcast job, retry and
+failure UX end to end.
 - `verify:rls` / `verify:agentic` and live migrations …0002/…0003 still need
   a run against the live project (DB creds not in the repo).

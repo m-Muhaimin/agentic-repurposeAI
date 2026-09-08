@@ -8,11 +8,13 @@ import {
   MAX_SOURCE_FILE_BYTES,
   MAX_SOURCE_FILE_MB,
   SOURCE_FILE_EXTENSIONS,
-  TRANSCRIPT_FILE_EXTENSIONS,
+  DOCUMENT_FILE_EXTENSIONS,
+  IMAGE_FILE_EXTENSIONS,
+  FILE_BACKED_EXTENSIONS,
   fileExtension,
   isAllowedSourceExtension,
   isAllowedSourceMime,
-  isAllowedTranscriptExtension,
+  isAllowedFileBackedExtension,
   formatBytes
 } from "@/lib/limits";
 import { getUsage, formatResetDate } from "@/lib/billing/usage-client";
@@ -163,8 +165,8 @@ export default function UploadPage() {
     if (f.size > MAX_SOURCE_FILE_BYTES) {
       return `This file is ${formatBytes(f.size)} — the limit is ${MAX_SOURCE_FILE_MB} MB.`;
     }
-    if (!isAllowedTranscriptExtension(f.name)) {
-      return `Unsupported ".${fileExtension(f.name)}" file. Supported: ${TRANSCRIPT_FILE_EXTENSIONS.join(", ")}.`;
+    if (!isAllowedFileBackedExtension(f.name)) {
+      return `Unsupported ".${fileExtension(f.name)}" file. Supported: ${FILE_BACKED_EXTENSIONS.join(", ")}.`;
     }
     return null;
   }
@@ -438,22 +440,29 @@ export default function UploadPage() {
               ) : mode === "transcript" ? (
                 <div>
                   <label htmlFor="transcriptFile" className="form-label">
-                    Transcript file
+                    Transcript, document, or image
                   </label>
                   <input
                     id="transcriptFile"
                     type="file"
-                    accept=".txt,.srt,.vtt,.md,.markdown,text/plain,text/markdown,text/vtt"
+                    accept=".txt,.srt,.vtt,.md,.markdown,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif,text/plain,text/markdown,text/vtt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                     required
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     className="form-control"
                   />
                   <p className="mt-2 text-xs text-theme-text-secondary">
-                    Provide your own transcript, captions, or a Markdown document —{" "}
-                    {TRANSCRIPT_FILE_EXTENSIONS.join(", ")}.
-                    Subtitle files ({TRANSCRIPT_FILE_EXTENSIONS.filter((e) => e !== "txt").join(", ")})
-                    keep their timestamps; a plain .txt, .md or .markdown works too and skips the
-                    transcription step entirely.
+                    Paste your own transcript, captions, a document, or an image —{" "}
+                    {FILE_BACKED_EXTENSIONS.join(", ")}.
+                    Text: .txt / .md / .markdown and subtitles keep their timestamps; PDF and DOCX
+                    are read straight from the file; images are understood by vision (OCR). All of
+                    these skip the transcription step entirely.
+                    {DOCUMENT_FILE_EXTENSIONS.length > 0 && (
+                      <>
+                        {" "}
+                        Documents: {DOCUMENT_FILE_EXTENSIONS.join(", ")}. Images:{" "}
+                        {IMAGE_FILE_EXTENSIONS.join(", ")}.
+                      </>
+                    )}
                   </p>
                 </div>
               ) : (
