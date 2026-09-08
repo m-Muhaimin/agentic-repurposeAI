@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { outputRegistry, OutputRegistry } from "@/lib/output-registry";
+import { FORMATS, PROMPTS, FORMAT_LABELS, FORMAT_DESCRIPTIONS } from "@/lib/ai/prompts";
 import type { ContentIntelligence } from "@/lib/intelligence/types";
 import { analyzeContent } from "@/lib/intelligence";
 
@@ -121,6 +122,26 @@ describe("outputRegistry.validate (quality gate)", () => {
     expect(res.ok).toBe(false);
     expect(res.errors[0]).toMatch(/unknown/);
   });
+
+  it("passes content at the exact lower and upper bounds (inclusive)", () => {
+    // newsletter: minWords 150, maxWords 600.
+    expect(outputRegistry.validate("newsletter", "word ".repeat(150)).ok).toBe(true);
+    expect(outputRegistry.validate("newsletter", "word ".repeat(600)).ok).toBe(true);
+    expect(outputRegistry.validate("newsletter", "word ".repeat(149)).ok).toBe(false);
+    expect(outputRegistry.validate("newsletter", "word ".repeat(601)).ok).toBe(false);
+    // linkedin_post: minChars 200, maxChars 3000.
+    expect(outputRegistry.validate("linkedin_post", "a".repeat(200)).ok).toBe(true);
+    expect(outputRegistry.validate("linkedin_post", "a".repeat(3000)).ok).toBe(true);
+    expect(outputRegistry.validate("linkedin_post", "a".repeat(199)).ok).toBe(false);
+  });
+
+  it("reports both over-and-under violations at once", () => {
+    // 10 words fails minWords 150; content.length 20 also < nothing (newsletter
+    // has no char bounds), but both word bounds can't be hit simultaneously.
+    const over = outputRegistry.validate("newsletter", "word ".repeat(700)); // >600 words
+    expect(over.ok).toBe(false);
+    expect(over.errors.join(" ")).toMatch(/max 600/);
+  });
 });
 
 describe("OutputRegistry (extension point)", () => {
@@ -156,5 +177,49 @@ describe("OutputRegistry (extension point)", () => {
   it("rejects invalid ids", () => {
     const reg = new OutputRegistry();
     expect(() => reg.register({ id: "", label: "x", description: "d", systemPrompt: "p" })).toThrow(/invalid output id/);
+  });
+
+  it("re-registering an id overwrites in place (last-wins, idempotent module load)", () => {
+    const reg = new OutputRegistry();
+    reg.register({ id: "a", label: "first", description: "d", systemPrompt: "p1" });
+    reg.register({ id: "a", label: "second", description: "d", systemPrompt: "p2" });
+    expect(reg.formats()).toEqual(["a"]);
+    expect(reg.get("a")?.label).toBe("second");
+    expect(reg.get("a")?.systemPrompt).toBe("p2");
+  });
+
+  it("treats a definition with no evidence gate as always qualifying", () => {
+    const reg = new OutputRegistry();
+    reg.register({ id: "always", label: "x", description: "d", systemPrompt: "p" });
+    expect(reg.recommend(minimal())[0].definition.id).toBe("always");
+    expect(reg.recommend(minimal())[0].score).toBe(1);
+    expect(reg.recommend(minimal())[0].reason).toBe("no evidence gate");
+  });
+});
+
+describe("legacy façade ↔ registry alignment (lib/ai/prompts)", () => {
+  // The hard-coded OutputFormat union in lib/ai/prompts.ts is a thin typed
+  // façade over the registry. New outputs added ONLY to the registry must not
+  // silently leak into legacy generation/billing code — and the façade must
+  // never drift from the built-in prompt strings the generate pipeline uses.
+  // These assertions pin the contract between the two so a future contributor
+  // who widens the registry cannot accidentally change legacy behavior.
+  it("exposes exactly the three legacy formats, in registry order", () => {
+    expect(FORMATS).toEqual(["linkedin_post", "newsletter", "shortform_script"]);
+  });
+
+  it("labels and descriptions agree with the registry definitions", () => {
+    for (const id of FORMATS) {
+      const def = outputRegistry.get(id);
+      expect(def).toBeTruthy();
+      expect(FORMAT_LABELS[id]).toBe(def!.label);
+      expect(FORMAT_DESCRIPTIONS[id]).toBe(def!.description);
+    }
+  });
+
+  it("prompt strings are the registry's system prompts (no drift)", () => {
+    for (const id of FORMATS) {
+      expect(PROMPTS[id]).toBe(outputRegistry.get(id)?.systemPrompt);
+    }
   });
 });

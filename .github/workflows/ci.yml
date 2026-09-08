@@ -32,10 +32,14 @@ jobs:
   verify-live-db:
     name: Live Supabase RLS + Agentic verification
     runs-on: ubuntu-latest
-    # Only runs when the live-project credentials are configured in repo secrets.
-    # These exercises write throwaway users/rows and clean up after themselves.
+    # Runs on every push/PR but the live-DB steps below are skipped unless the
+    # project credentials are configured in repo secrets (an absent secret
+    # results in an empty env var). These exercises write throwaway users/rows
+    # and clean up after themselves.
+    # NOTE: `secrets` is NOT allowed in a job-level `if:` expression (GitHub
+    # Actions workflow validation rejects it), so the gate lives at step level
+    # via `env.SUPABASE_SERVICE_ROLE_KEY` instead.
     needs: build
-    if: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -52,7 +56,13 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: RLS cross-user verification
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: npm run verify:rls
 
       - name: Agentic V4 schema verification
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: npm run verify:agentic
+
+      - name: Live-DB verification skipped (no credentials configured)
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: echo "SUPABASE_SERVICE_ROLE_KEY not configured in repo secrets; skipping live-DB RLS/agentic verification."
