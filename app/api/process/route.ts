@@ -5,6 +5,7 @@ import { supabaseContentStore, registerStoreBackedProviders } from "@/lib/ingest
 import { analyzeContent, assertGrounded } from "@/lib/intelligence";
 import { generateOutput, type OutputFormat } from "@/lib/ai/generate";
 import { buildSystemPrompt } from "@/lib/ai/prompts";
+import { outputRegistry } from "@/lib/output-registry";
 import { getUserPrompts, type UserPromptMap } from "@/lib/prompts";
 import { resolvePlan } from "@/lib/billing/entitlements";
 import { maxInputSecondsFor, currentWindow } from "@/lib/billing/usage";
@@ -12,7 +13,12 @@ import { recordUsageEvent } from "@/lib/billing/ledger";
 import { track, EVENTS } from "@/lib/analytics/events";
 import { log } from "@/lib/logger";
 
-const FORMATS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script"];
+// The formats this job generates come from the Phase-5 Output Registry (a
+// first-class catalog of output definitions). Kept to the three LLM-generated
+// formats for now — registry-derived, never hard-coded.
+const FORMATS: OutputFormat[] = outputRegistry
+  .formats()
+  .filter((f): f is OutputFormat => ["linkedin_post", "newsletter", "shortform_script"].includes(f));
 
 // A claimed job is considered stale (and re-claimable) after this long, so a
 // serverless function that died to a timeout doesn't leave the job parked in

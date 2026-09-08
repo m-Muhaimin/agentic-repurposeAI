@@ -1,12 +1,6 @@
-import type {
-  ContentIntelligence,
-  IntelligenceClaim,
-  IntelligenceHook,
-  IntelligenceQuote,
-  IntelligenceStory,
-  IntelligenceTopic,
-  IntelligenceQuestion
-} from "@/lib/intelligence/types";
+// Intentionally no runtime imports: this module declares the registry's shape
+// only. The compatibility surface (lib/output-registry/registry.ts) is where
+// ContentIntelligence is read.
 
 export interface OutputRequiresEvidence {
   minTopics?: number;

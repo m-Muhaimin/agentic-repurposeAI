@@ -56,27 +56,35 @@ function countArray<T>(v: T[] | undefined): number {
   return Array.isArray(v) ? v.length : 0;
 }
 
-function evaluateEvidence(req: OutputRequiresEvidence, intel: ContentIntelligence): [number, string[]] {
+function evaluateEvidence(req: OutputRequiresEvidence, intel: ContentIntelligence): { allMet: boolean; hits: string[]; missing: string[]; ratios: number[] } {
   const hits: string[] = [];
-  const total = Object.keys(req).length;
-  if (req.minTopics != null && countArray(intel.topics) >= req.minTopics) hits.push(`${countArray(intel.topics)} topics (≥${req.minTopics})`);
-  if (req.minClaims != null && countArray(intel.claims) >= req.minClaims) hits.push(`${countArray(intel.claims)} claims (≥${req.minClaims})`);
-  if (req.minHooks != null && countArray(intel.hooks) >= req.minHooks) hits.push(`${countArray(intel.hooks)} hooks (≥${req.minHooks})`);
-  if (req.minQuotes != null && countArray(intel.quotes) >= req.minQuotes) hits.push(`${countArray(intel.quotes)} quotes (≥${req.minQuotes})`);
-  if (req.minQuestions != null && countArray(intel.questions) >= req.minQuestions) hits.push(`${countArray(intel.questions)} questions (≥${req.minQuestions})`);
-  if (req.minStories != null && countArray(intel.stories) >= req.minStories) hits.push(`${countArray(intel.stories)} stories (≥${req.minStories})`);
-  const score = total > 0 ? hits.length / total : 0;
-  return [score, hits];
+  const missing: string[] = [];
+  const ratios: number[] = [];
+  const has = (min: number | undefined, got: number, label: string, minLabel: number) => {
+    if (min == null) return;
+    if (got >= min) {
+      hits.push(`${label}: ${got} (≥${minLabel})`);
+      ratios.push(Math.min(got / Math.max(minLabel, 1), 3));
+    } else {
+      missing.push(`${label} needs ≥${minLabel} (got ${got})`);
+    }
+  };
+  has(req.minTopics, countArray(intel.topics), "topics", req.minTopics ?? 0);
+  has(req.minClaims, countArray(intel.claims), "claims", req.minClaims ?? 0);
+  has(req.minHooks, countArray(intel.hooks), "hooks", req.minHooks ?? 0);
+  has(req.minQuotes, countArray(intel.quotes), "quotes", req.minQuotes ?? 0);
+  has(req.minQuestions, countArray(intel.questions), "questions", req.minQuestions ?? 0);
+  has(req.minStories, countArray(intel.stories), "stories", req.minStories ?? 0);
+  return { allMet: missing.length === 0, hits, missing, ratios };
 }
 
 function scoreDefinition(req: OutputRequiresEvidence, intel: ContentIntelligence): [number, string] {
-  const [score, hits] = evaluateEvidence(req, intel);
-  const reason = hits.length > 0
-    ? `fits: ${hits.join("; ")}`
-    : `missing: ${Object.entries(req)
-        .map(([k, v]) => `${k.replace(/^min/, "")} ≥${v}`)
-        .join(", ")}`;
-  return [score, reason];
+  const { allMet, hits, missing, ratios } = evaluateEvidence(req, intel);
+  if (!allMet) return [0, `missing: ${missing.join("; ")}`];
+  // All minimums met → score starts at 0.5 and rises toward 1 as counts overshoot
+  // their requirement (clamped: 3x requirement = full score).
+  const overshoot = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 1;
+  return [Math.min(1, 0.5 + 0.5 * (Math.min(overshoot, 2.5) - 1) / 1.5), `fits: ${hits.join("; ")}`];
 }
 
 // ── validation ─────────────────────────────────────────────────────────────

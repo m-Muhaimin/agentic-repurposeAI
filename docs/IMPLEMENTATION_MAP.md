@@ -508,3 +508,39 @@ ingest regardless of output formats.
 Next step (Phase 5): an Output Registry — `OutputDefinition` + registry +
 compatibility surface so opportunity→output recommendations (Phase 6) resolve
 against a first-class catalog instead of a hard-coded list.
+
+## Phase 5 — Output Registry (delivered)
+
+Turned the hard-coded format arrays into a first-class catalog, so Phase 6's
+opportunity→output recommendations and Phase 7's quality gate resolve against a
+single source of truth instead of duplicated lists.
+
+- **`lib/output-registry/types.ts`** — `OutputDefinition` (id, label,
+  description, systemPrompt, optional `requiresEvidence` gate, optional
+  `validation` bounds, `derived` flag), `OutputRecommendation`, `ValidationResult`.
+- **`lib/output-registry/registry.ts`** — `OutputRegistry` (register / get /
+  all / formats / recommend / validate) + singleton. `recommend(intelligence)`
+  scores every registered definition against the intelligence artifact: outputs
+  whose evidence gate (min topics/claims/hooks/quotes/questions/stories) is not
+  fully met score 0 and are excluded; qualifying outputs score 0.5→1 by how far
+  counts overshoot the minimum. `validate(id, content)` enforces word/char
+  bounds — the raw material for Phase 7's quality gate.
+- **`lib/output-registry/definitions.ts`** — the three built-ins
+  (linkedin_post / newsletter / shortform_script) with their evidence gates,
+  validation bounds, and the exact same system prompts generation always used.
+- **`lib/output-registry/index.ts`** — registers built-ins at module load and
+  re-exports the surface.
+- **`lib/ai/prompts.ts`** — now a thin façade over the registry
+  (`FORMATS`/`PROMPTS`/`buildSystemPrompt` shapes unchanged) so all existing
+  callers keep working while the registry becomes the source of truth. New
+  outputs added to the registry automatically appear everywhere.
+- **Worker (`app/api/process/route.ts`)** derives its format list from
+  `outputRegistry.formats()` instead of a hard-coded array.
+- **Tests**: `lib/output-registry/registry.test.ts` (10 tests — built-in
+  registration, gating/exclusion, monotonic scoring, validation bounds, unknown
+  id, custom-definition extension point). 378 tests / 39 files, `tsc` clean,
+  build green.
+
+Next step (Phase 6): opportunity→output recommendations — map the intelligence
+engine's derived opportunities to registry outputs with a "Let the Agent decide"
+path.
