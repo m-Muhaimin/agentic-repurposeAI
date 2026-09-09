@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/components/page-header";
 import AgentWorkspace from "@/components/agent/agent-workspace";
-import type { AgentContextData } from "@/components/agent/agent-context-strip";
-import { getAgentPreferences } from "@/lib/agent/memory";
-import { getConnection } from "@/lib/buffer/connections";
+import { getAgentContext } from "@/lib/agent/context";
+import { AGENT_MODES, type AgentMode } from "@/types/agent";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +12,23 @@ function param(v: QueryValue): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+function isAgentMode(v: string | undefined): v is AgentMode {
+  return Boolean(v && (AGENT_MODES as string[]).includes(v));
+}
+
 export default async function AgentPage({
   searchParams
 }: {
-  searchParams: { goal?: QueryValue; source?: QueryValue; run?: QueryValue };
+  searchParams: { goal?: QueryValue; source?: QueryValue; run?: QueryValue; mode?: QueryValue };
 }) {
-  // Real deep links FROM the dashboard: ?goal= prefills the composer,
-  // ?source= preselects a ready source, ?run= loads that run's plan.
+  // Real deep links FROM the dashboard (and recommendations): ?goal= prefills
+  // the composer, ?source= preselects a ready source, ?run= loads that run's
+  // plan, ?mode= preselects the autonomy mode.
   const initialGoal = param(searchParams?.goal)?.slice(0, 800);
   const initialSourceId = param(searchParams?.source);
   const initialRunId = param(searchParams?.run);
+  const initialModeRaw = param(searchParams?.mode);
+  const initialMode = isAgentMode(initialModeRaw) ? initialModeRaw : undefined;
 
   const supabase = createClient();
   const {
@@ -39,70 +45,9 @@ export default async function AgentPage({
     .order("created_at", { ascending: false })
     .limit(100);
 
-  // ── "What your agent knows" — every figure is real and user-scoped. Each
-  // lookup fails open to an honest empty value; nothing is invented. ────────
-  let libraryDrafts = 0;
-  try {
-    const { count } = await supabase
-      .from("outputs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user!.id);
-    libraryDrafts = count ?? 0;
-  } catch {
-    libraryDrafts = 0;
-  }
-
-  let totalSources = (sources ?? []).length;
-  try {
-    const { count } = await supabase
-      .from("sources")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user!.id);
-    totalSources = count ?? totalSources;
-  } catch {
-    // keep the ready-source list length as the honest best effort
-  }
-
-  let brandVoiceSet = false;
-  try {
-    const prefs = await getAgentPreferences(user!.id);
-    brandVoiceSet = Boolean(
-      prefs?.brand && (prefs.brand.tone?.trim().length > 0 || (prefs.brand.examples?.length ?? 0) > 0)
-    );
-  } catch {
-    brandVoiceSet = false;
-  }
-
-  let strategyPlans = 0;
-  try {
-    const { count } = await supabase
-      .from("v4_content_strategies")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user!.id);
-    strategyPlans = count ?? 0;
-  } catch {
-    strategyPlans = 0;
-  }
-
   const readySources = (sources ?? []).filter((s) => s.status === "done" || s.status === "failed");
 
-  // Real publishing channel connection (honest-per-build: stubbed pipeline, so
-  // "Connected" means the Buffer OAuth integration exists for the account).
-  let publishingConnected = false;
-  try {
-    publishingConnected = (await getConnection(user!.id)) !== null;
-  } catch {
-    publishingConnected = false;
-  }
-
-  const context: AgentContextData = {
-    readySources: readySources.length,
-    totalSources,
-    libraryDrafts,
-    brandVoiceSet,
-    strategyPlans,
-    publishingConnected
-  };
+  const context = await getAgentContext(user!.id);
 
   return (
       <div className="workspace py-8 lg:py-10">
@@ -118,10 +63,10 @@ export default async function AgentPage({
             created_at: s.created_at
           }))}
           defaultSourceId={readySources[0]?.id ?? null}
-          context={context}
           initialGoal={initialGoal}
           initialSourceId={initialSourceId}
           initialRunId={initialRunId}
+          initialMode={initialMode}
         />
       </div>
   );

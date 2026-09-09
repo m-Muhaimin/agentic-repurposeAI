@@ -47,10 +47,10 @@ interface StrategyData {
 
 export default function OpportunityFeed({
   onStartRun,
-  focusKey
+  focusKey = 0
 }: {
   onStartRun: (sourceId: string, mode: AgentMode) => void;
-  focusKey: number;
+  focusKey?: number;
 }) {
   const [data, setData] = useState<StrategyData | null>(null);
   const [loading, setLoading] = useState(true);

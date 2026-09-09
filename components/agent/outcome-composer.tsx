@@ -35,6 +35,7 @@ export default function OutcomeComposer({
   sources,
   defaultSourceId,
   initialGoal,
+  initialMode,
   busy,
   error,
   onStart,
@@ -43,6 +44,7 @@ export default function OutcomeComposer({
   sources: ComposerSource[];
   defaultSourceId: string | null;
   initialGoal?: string;
+  initialMode?: AgentMode;
   busy: boolean;
   error: string | null;
   onStart: (goal: string, intent: AgentIntent, sourceId: string, mode: AgentMode) => void;
@@ -51,6 +53,7 @@ export default function OutcomeComposer({
   const [goal, setGoal] = useState(initialGoal ?? "");
   // A prefilled goal (dashboard deep link) also pre-selects its intent and the
   // matching autonomy default, so the composer reflects what the user asked.
+  // A recommendation deep link (?mode=) pre-selects its autonomy mode.
   const initialIntent = useMemo(
     () => (initialGoal?.trim() ? detectIntent(initialGoal) : null),
     [initialGoal]
@@ -58,8 +61,8 @@ export default function OutcomeComposer({
   const [intent, setIntent] = useState<AgentIntent>(initialIntent ?? "create");
   const [intentTouched, setIntentTouched] = useState(Boolean(initialIntent));
   const [sourceId, setSourceId] = useState<string>(defaultSourceId ?? sources[0]?.id ?? "");
-  const [mode, setMode] = useState<AgentMode>(initialIntent ? defaultModeFor(initialIntent) : "assist");
-  const [modeTouched, setModeTouched] = useState(Boolean(initialIntent));
+  const [mode, setMode] = useState<AgentMode>(initialIntent ? defaultModeFor(initialIntent) : initialMode ?? "assist");
+  const [modeTouched, setModeTouched] = useState(Boolean(initialIntent || initialMode));
 
   // Gentle intent auto-detection from the goal text — only until the user
   // touches the chips, and it never fights a manual selection.
@@ -213,9 +216,9 @@ export default function OutcomeComposer({
               ariaLabel="Autonomy mode"
             />
             <p className="mt-2 text-xs text-theme-text-secondary">
-              “Guide me” plans and drafts — you approve every angle first. “Do it with my approval”
-              adds one bounded auto-revision of a flagged draft. “Run automatically” is reserved for
-              publishing and behaves with approvals today.
+              All three modes plan, wait for your approval on every angle, then run on their own.
+              “Do it with my approval” also auto-revises a flagged draft once; “Run automatically”
+              further unlocks publishing when a channel is connected.
             </p>
           </div>
         )}

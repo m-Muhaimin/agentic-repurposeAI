@@ -20,7 +20,7 @@ const ACTIONS = [
   },
   {
     href: "/agent",
-    title: "Draft with VervAI",
+    title: "Agent",
     body: "Describe a goal — it plans, you approve, then it drafts.",
     icon: (
       <>

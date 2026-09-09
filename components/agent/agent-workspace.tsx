@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import EmptyState from "@/components/empty-state";
 import type { AgentMode } from "@/types/agent";
-import AgentContextStrip, { type AgentContextData } from "./agent-context-strip";
 import OutcomeComposer from "./outcome-composer";
-import OpportunityFeed from "./opportunity-feed";
 import RunList from "./run-list";
 import RunDetail from "./run-detail";
 
@@ -16,44 +15,40 @@ export interface AgentSource {
   created_at: string;
 }
 
-const RUN_STATUSES = [
-  "created",
-  "planning",
-  "awaiting_approval",
-  "executing",
-  "evaluating",
-  "done",
-  "failed",
-  "cancelled"
-] as const;
-export type RunStatusView = (typeof RUN_STATUSES)[number];
-
 // The workspace owns the run lifecycle against the durable /api/agent/* routes.
 // No in-memory state that matters: every transition is recoverable from
 // v4_agent_runs + v4_agent_steps. The session's `goals` map is display-only —
 // the durable run row keeps its source-linked identity.
+//
+// Layout is a bento grid: composer (wide, top-left), run detail (wide, below),
+// history (tall rail on the right). Starting a run also starts the worker, so
+// the run advances to its plan without a manual "Resume" kick.
 
 export default function AgentWorkspace({
   initialSources,
   defaultSourceId,
-  context,
   initialGoal,
   initialSourceId,
-  initialRunId
+  initialRunId,
+  initialMode
 }: {
   initialSources: AgentSource[];
   defaultSourceId: string | null;
-  context: AgentContextData;
   initialGoal?: string;
   initialSourceId?: string;
   initialRunId?: string;
+  initialMode?: AgentMode;
 }) {
+  const router = useRouter();
   const [sources] = useState<AgentSource[]>(initialSources);
   const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [goals, setGoals] = useState<Record<string, string>>({});
-  const [focusKey, setFocusKey] = useState(0);
+
+  // Stable identity: RunDetail keeps the latest via a ref, but giving this a
+  // constant reference means parent re-renders never churn its poll effect.
+  const handleDetailChange = useCallback(() => {}, []);
 
   async function startRun(srcId?: string, runMode?: AgentMode, goal = "") {
     const effectiveSourceId = srcId ?? "";
@@ -62,24 +57,33 @@ export default function AgentWorkspace({
     setBusy(true);
     setError(null);
 
-    const res = await fetch("/api/agent/runs", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sourceId: effectiveSourceId, mode: effectiveMode })
-    });
-    const body = (await res.json()) as { ok?: boolean; run?: { id: string }; error?: string };
+    try {
+      const res = await fetch("/api/agent/runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sourceId: effectiveSourceId, mode: effectiveMode })
+      });
+      const body = (await res.json()) as { ok?: boolean; run?: { id: string }; error?: string };
 
-    if (!res.ok || !body.ok || !body.run) {
-      setError(body.error ?? "VervAI couldn't start this run. Your content is safe. [Try again]");
+      if (!res.ok || !body.ok || !body.run) {
+        setError(body.error ?? "VervAI couldn't start this run. Your content is safe. [Try again]");
+        return;
+      }
+
+      if (goal) {
+        setGoals((prev) => ({ ...prev, [body.run!.id]: goal }));
+      }
+      setRunId(body.run!.id);
+
+      // Auto-advance: starting the run also starts the worker, so it plans
+      // without a manual "Resume" kick. If the kick fails the run stays
+      // parked at its durable state, visible in history, and can be resumed.
+      await kickRun(body.run!.id);
+    } catch {
+      setError("VervAI couldn't start this run. Your content is safe. [Try again]");
+    } finally {
       setBusy(false);
-      return;
     }
-
-    if (goal) {
-      setGoals((prev) => ({ ...prev, [body.run!.id]: goal }));
-    }
-    setRunId(body.run.id);
-    setBusy(false);
   }
 
   // Kick the parked run forward (planning at first, execution after approval).
@@ -113,29 +117,24 @@ export default function AgentWorkspace({
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      {/* Left: what the agent knows + outcome-first composer + opportunities + history */}
-      <div className="space-y-6">
+      {/* Composer — the workspace's entry point */}
+      <section className="lg:col-span-2 lg:row-start-1">
         <OutcomeComposer
           sources={sources}
           defaultSourceId={effectiveDefaultSourceId}
           initialGoal={initialGoal}
+          initialMode={initialMode}
           busy={busy}
           error={error}
           onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}
-          onExploreOpportunities={() => setFocusKey((k) => k + 1)}
+          onExploreOpportunities={() => router.push("/agent/observe")}
         />
+      </section>
 
-        <AgentContextStrip context={context} />
-
-        <OpportunityFeed onStartRun={(src, m) => startRun(src, m)} focusKey={focusKey} />
-
-        <RunList runId={runId} goals={goals} onSelect={setRunId} onKick={kickRun} />
-      </div>
-
-      {/* Right: the selected run's plan / progress / drafts */}
-      <div className="lg:col-span-2">
+      {/* Run detail — the selected run's plan / progress / drafts */}
+      <section className="lg:col-span-2 lg:row-start-2" aria-live="polite">
         {runId ? (
-          <RunDetail runId={runId} goal={goals[runId]} onChange={() => {}} />
+          <RunDetail runId={runId} goal={goals[runId]} onChange={handleDetailChange} />
         ) : (
           <EmptyState
             icon={
@@ -150,7 +149,12 @@ export default function AgentWorkspace({
             description="Start a VervAI run, or pick one from history — its plan, progress and drafts appear here."
           />
         )}
-      </div>
+      </section>
+
+      {/* History — durable runs, resume picks up where one parked */}
+      <aside className="lg:col-span-1 lg:row-span-2">
+        <RunList runId={runId} goals={goals} onSelect={setRunId} onKick={kickRun} />
+      </aside>
     </div>
   );
 }

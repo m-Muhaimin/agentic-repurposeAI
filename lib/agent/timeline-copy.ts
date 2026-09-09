@@ -23,17 +23,6 @@ export interface TimelineOpts {
   approvedIdeas: number;
 }
 
-function stepCounts(steps: TimelineStepInput[], kind: string) {
-  let total = 0;
-  let ours = 0;
-  for (const s of steps) {
-    if (!s.kind) continue;
-    total += 1;
-    if (s.kind === kind) ours += 1;
-  }
-  return { total, ours };
-}
-
 function anyDone(steps: TimelineStepInput[], kind: string) {
   return steps.some((s) => s.kind === kind && s.status === "done");
 }
@@ -91,37 +80,42 @@ export function humanizeTimeline(steps: TimelineStepInput[], opts: TimelineOpts)
     lines.push({ id: "review", text: "Waiting for your review", state: "pending" });
   }
 
-  const drafted = stepCounts(steps, "generation").ours;
-  const generating = anyActive(steps, "generation");
-  if (opts.status === "executing" || opts.status === "evaluating" || opts.status === "done") {
+  const generationSteps = steps.filter((s) => s.kind === "generation");
+  const drafted = generationSteps.filter((s) => s.status === "done").length;
+  const generating = generationSteps.some((s) => s.status !== "done" && s.status !== "skipped" && s.status !== "failed");
+  const reachedExecution = opts.status === "executing" || opts.status === "evaluating" || opts.status === "done";
+  if (reachedExecution || (generating && opts.status !== "failed" && opts.status !== "cancelled")) {
     lines.push({
       id: "draft",
       text: drafted > 0 ? `Drafted ${drafted} piece${drafted === 1 ? "" : "s"}` : "Writing your drafts",
       state: drafted > 0 ? "done" : generating ? "active" : "pending"
     });
-  } else if (opts.status !== "failed" && opts.status !== "cancelled") {
-    lines.push({ id: "draft", text: "Writing drafts", state: "pending" });
   }
 
-  const reviewed = anyDone(steps, "review");
-  const reviewing = anyActive(steps, "review");
-  if (opts.status === "evaluating" || opts.status === "done") {
+  const reviewSteps = steps.filter((s) => s.kind === "review");
+  const reviewed = reviewSteps.some((s) => s.status === "done");
+  const reviewing = reviewSteps.some((s) => s.status !== "done" && s.status !== "skipped" && s.status !== "failed");
+  const reachedReview = opts.status === "evaluating" || opts.status === "done";
+  if (reachedReview || ((reviewing || reviewed) && opts.status !== "failed" && opts.status !== "cancelled")) {
     lines.push({
       id: "quality",
       text: reviewed ? "Quality review complete" : "Running the quality review",
       state: reviewed ? "done" : reviewing ? "active" : "pending"
     });
-  } else if (opts.status !== "failed" && opts.status !== "cancelled") {
-    lines.push({ id: "quality", text: "Running the quality review", state: "pending" });
   }
 
+  // Publishing is not part of the run itself — it's a separate, human-gated
+  // queue. So this stage only appears when a distribution step actually
+  // exists; it never renders as an always-gray "upcoming" line.
   const distributed = anyDone(steps, "distribution");
   const distributing = anyActive(steps, "distribution");
-  lines.push({
-    id: "publish",
-    text: distributed ? "Sent to your publishing queue" : "Preparing your publishing queue",
-    state: distributed ? "done" : distributing ? "active" : "pending"
-  });
+  if (distributed || distributing) {
+    lines.push({
+      id: "publish",
+      text: distributed ? "Sent to your publishing queue" : "Preparing your publishing queue",
+      state: distributed ? "done" : "active"
+    });
+  }
 
   if (opts.status === "done") {
     lines.push({

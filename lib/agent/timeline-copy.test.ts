@@ -19,11 +19,12 @@ describe("humanizeTimeline", () => {
       approvedIdeas: 6
     });
 
-    expect(lines.map((l) => l.id)).toEqual(["analyze", "angles", "review", "draft", "quality", "publish"]);
+    // From the awaiting_approval card the later stages are omitted entirely —
+    // they read as "upcoming/skipped" while the run is parked on review.
+    expect(lines.map((l) => l.id)).toEqual(["analyze", "angles", "review"]);
     expect(lines[0]).toMatchObject({ text: "Understood your source and brand context", state: "done" });
     expect(lines[1]).toMatchObject({ text: "Found 6 strong angles", state: "done" });
     expect(lines[2]).toMatchObject({ text: "Ready for your review — keep or skip each angle", state: "active" });
-    expect(lines[3]).toMatchObject({ text: "Writing drafts", state: "pending" });
   });
 
   it("narrates a completed run with kept counts and drafted pieces", () => {
@@ -47,6 +48,24 @@ describe("humanizeTimeline", () => {
     expect(txt).toContain("Sent to your publishing queue");
     expect(txt).toContain("Ready — drafts are saved in your library");
     expect(lines[lines.length - 1]).toMatchObject({ id: "done", state: "done" });
+  });
+
+  it("shows the publishing stage only when a distribution step exists", () => {
+    const withoutDistribution = humanizeTimeline([step("planning"), step("generation"), step("review")], {
+      status: "done",
+      totalIdeas: 1,
+      approvedIdeas: 1
+    });
+    expect(withoutDistribution.some((l) => l.id === "publish")).toBe(false);
+    expect(withoutDistribution.some((l) => l.text.includes("Preparing your publishing queue"))).toBe(false);
+
+    const withDistribution = humanizeTimeline([step("planning"), step("generation"), step("review"), step("distribution")], {
+      status: "done",
+      totalIdeas: 1,
+      approvedIdeas: 1
+    });
+    expect(withDistribution.some((l) => l.id === "publish" && l.state === "done")).toBe(true);
+    expect(withDistribution.some((l) => l.text === "Sent to your publishing queue")).toBe(true);
   });
 
   it("skips the done banner on cancelled runs but keeps the narrative", () => {

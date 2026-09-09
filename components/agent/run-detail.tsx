@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardHeader } from "@/components/card";
 import type { AgentRunRow, ContentIdea, EditSignal, RunStatus } from "@/types/agent";
 import { stepSpendFromOutput, aggregateRunSpend, formatCostUsd, formatCostUnits, spendSourceLabel, type MonthlyAgentSpend, type StepSpend } from "@/lib/agent/spend";
@@ -54,6 +54,14 @@ interface RunDetailData {
 }
 
 const IN_FLIGHT: RunStatus[] = ["created", "planning", "executing", "evaluating"];
+
+// Poll cadence adapts to how much the run can still change: fast while the
+// worker is advancing, a gentle beat while parked waiting on review, idle
+// otherwise. Always keeps the last good snapshot on screen (stale-while-validate).
+const POLL_ADVANCING_MS = 2000;
+const POLL_PARKED_MS = 5000;
+const POLL_IDLE_MS = 8000;
+
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter",
@@ -73,30 +81,67 @@ export default function RunDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Hold the latest props/state in refs so `refresh` keeps a stable identity
+  // for a given runId. The parent passes an inline onChange, so depending on
+  // it directly would re-run this poll effect (and flash the loading card)
+  // on every parent render.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const dataRef = useRef<RunDetailData | null>(data);
+  dataRef.current = data;
+  const fetchingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
   const refresh = useCallback(async () => {
+    // Skip a poll that's still in flight — overlapping fetches can resolve out
+    // of order and make the view jump. The next scheduled tick picks up.
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const res = await fetch(`/api/agent/runs/${runId}`);
+      const res = await fetch(`/api/agent/runs/${runId}`, { signal: controller.signal });
       if (res.ok) {
         const body = (await res.json()) as RunDetailData;
         setData(body);
-        onChange();
+        onChangeRef.current();
       }
     } catch {
-      // transient
+      // transient or superseded — keep the last good snapshot on screen
+    } finally {
+      fetchingRef.current = false;
     }
-  }, [runId, onChange]);
+  }, [runId]);
 
-  // Poll while the worker is still advancing.
+  // Poll while the run can still move, adaptively. The current snapshot never
+  // leaves the screen while the next one loads — no "Loading run…" flash on
+  // every tick. The loading card only appears on a genuine run switch, when
+  // there is nothing on screen to keep.
   useEffect(() => {
+    setData(null);
     refresh();
-    const timer = setInterval(() => {
-      setData((prev) => {
-        if (prev && IN_FLIGHT.includes(prev.run.status)) return prev;
-        return null;
-      });
-      refresh();
-    }, 3000);
-    return () => clearInterval(timer);
+
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const status = dataRef.current?.run.status;
+      const delay =
+        status && IN_FLIGHT.includes(status)
+          ? POLL_ADVANCING_MS
+          : status === "awaiting_approval"
+            ? POLL_PARKED_MS
+            : POLL_IDLE_MS;
+      timer = setTimeout(() => {
+        refresh();
+        schedule();
+      }, delay);
+    };
+    schedule();
+
+    return () => {
+      clearTimeout(timer);
+      abortRef.current?.abort();
+    };
   }, [runId, refresh]);
 
   async function kick() {
@@ -184,7 +229,7 @@ export default function RunDetail({
   const approvedIdeas = ideas.filter((i) => i.approved).length;
 
   return (
-    <div className="space-y-6">
+    <div key={run.id} className="space-y-6 animate-fade-in">
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -192,6 +237,12 @@ export default function RunDetail({
         <span className={`badge ${AGENT_STATUS_STYLE[run.status] ?? "bg-neutral-100 text-neutral-700"}`}>
           {AGENT_STATUS_LABEL[run.status] ?? run.status}
         </span>
+        {IN_FLIGHT.includes(run.status) && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500" aria-hidden="true">
+            <span className="size-1.5 rounded-full bg-primary-500 animate-pulse-soft" />
+            live
+          </span>
+        )}
       </div>
 
       {goal && (
