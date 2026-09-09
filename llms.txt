@@ -1,0 +1,20 @@
+# VervAI
+
+> A long-form → short-form content engine: upload an audio/video file, a YouTube URL, a subtitle
+> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section, and
+> short-form video scripts — generated in your voice. Includes an agentic layer (`/agent`) that
+> plans content angles from a transcript, human-gates them, then generates and evaluates drafts.
+
+Full content is available in [llms-full.txt](llms-full.txt).
+Complete HTTP API reference: [docs/API.md](docs/API.md).
+
+Primary resource:
+- [API Reference](docs/API.md) — exhaustive reference for the HTTP surface under `app/api/**`
+
+Recommended resources:
+- [Data Model](docs/data-model.md) — table-level authority for the Supabase schema
+- [Architecture Freeze](docs/ARCHITECTURE_FREEZE.md) — locked runtime contracts
+- [Implementation Map](docs/IMPLEMENTATION_MAP.md) — current ground-truth implementation guide
+- [ROADMAP.md](docs/ROADMAP.md) — core-app roadmap
+- [AGENTIC_ROADMAP.md](docs/AGENTIC_ROADMAP.md) — agent roadmap
+- [README.md](README.md) — setup & quick start

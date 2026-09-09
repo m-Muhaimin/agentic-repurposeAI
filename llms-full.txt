@@ -1,0 +1,272 @@
+# VervAI
+
+> A long-form → short-form content engine: upload an audio/video file, a YouTube URL, a subtitle
+> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section, and
+> short-form video scripts — generated in your voice. Includes an agentic layer (`/agent`) that
+> plans content angles from a transcript, human-gates them, then generates and evaluates drafts.
+
+[API Reference](docs/API.md) · [Data Model](docs/data-model.md) · [Architecture Freeze](docs/ARCHITECTURE_FREEZE.md) · [Implementation Map](docs/IMPLEMENTATION_MAP.md) · [Roadmap](docs/ROADMAP.md)
+
+Optional:
+- [AGENTIC_ROADMAP.md](docs/AGENTIC_ROADMAP.md) — agent roadmap: what's real vs. stubbed at each stage.
+
+---
+
+## 1. Overview
+
+- Stack: Next.js 14 (App Router), Supabase (Postgres + Auth + Storage), Google Gemini
+  (`gemini-3.6-flash`), OpenRouter fallback, AssemblyAI transcription (file path only).
+- Inputs: file upload (audio/video), YouTube URL (captions via OAuth, or archived yt-dlp
+  fallback), transcript files (`.srt/.vtt/.txt/.md/.markdown`), documents (`pdf/docx`), images,
+  and pasted links / URLs / podcast feeds.
+- Outputs (frozen union): `linkedin_post`, `newsletter`, `shortform_script`. Single source of
+  truth for "what outputs exist" is the Output Registry (`lib/output-registry/definitions.ts`).
+- Agent: `/agent` plans angles, gates them behind human approval, executes generation, and
+  deterministically evaluates drafts. Modes `assist | execute | automate`.
+- Publish: bring-your-own Buffer account — human-initiated send / schedule, never autonomous.
+
+## 2. Directory layout
+
+```
+app/                  Next.js pages + all API routes under app/api/**
+components/           UI components (agent workspace, legal, app shell, …)
+lib/                  Server logic: ingestion, ai, agent, billing, buffer, youtube, recommendations
+types/                agent.ts (mode/run/step/idea types), supabase.ts (handwritten placeholder)
+supabase/             schema.sql (reference), schema_agentic.sql, migrations/ (source of truth)
+scripts/              verify-rls.mjs, verify-agentic.mjs, gen-types.mjs, brand-check.mjs
+docs/                 Roadmaps, architecture, data model, runbooks
+middleware.ts         Session gate for protected routes
+```
+
+## 3. Commands
+
+- `npm run dev` — dev server (http://localhost:3000).
+- `npx tsc --noEmit` — fastest type check; run before building.
+- `npm run build` — the real gate (Next typechecks + builds).
+- `npm test` — vitest, all `**/*.test.ts`; single file `npx vitest run <path>`.
+- `npm run verify:rls` — cross-user RLS check against the live DB (reads `.env.local`).
+- `npm run verify:agentic` — same for `V4_` + `buffer_connections` tables (24/24 RLS, 38/38 agentic).
+- `npm run db:types` — regenerate `types/supabase.ts` (needs `SUPABASE_ACCESS_TOKEN`).
+- `npm run brand-check` — brand-safety lint. (`npm run lint` is `next lint` with no config: ignore.)
+- CI: `.github/workflows/ci.yml` — `npx tsc --noEmit` → `npm test` → build, plus a secrets-gated
+  job running both verify suites.
+
+## 4. Authentication
+
+Email/password via Supabase Auth. SSR session cookie (raw JSON, PKCE). `middleware.ts` protects
+`/dashboard /upload /repurpose /branding /connections /library /agent /publish /content /settings
+/reset-password` + account delete/export APIs. Route handlers resolve identity server-side via
+`supabase.auth.getUser()`; owner id is never read from the request body.
+
+Two Supabase clients — never mix:
+- `createClient()` (cookies + RLS) for user-scoped reads/ownership checks.
+- `createServiceClient()` (service role, bypasses RLS) for privileged writes (`outputs`,
+  `v4_agent_runs` claims, storage deletes, admin). Never import into client components.
+
+## 5. Pipeline (enqueue → worker → live dashboard)
+
+1. Intake on `/upload`: upload to the private `sources` storage bucket, then create a `sources`
+   row (or paste a YouTube/URL/link). No HTTP upload route — browser → Supabase Storage directly.
+2. `POST /api/repurpose` is **enqueue-only** → `{ jobId }`. Gates: rate limit (rolling minute),
+   atomic monthly cap + idempotency via the `enqueue_job` RPC (fail-closed 503 if unavailable).
+3. `POST /api/process` is the SSE worker: claims the job (queued, or running > 10-min stale
+   window), ingests (AssemblyAI for audio/video/YouTube; transcript/docs parse for free), persists
+   the canonical transcript (`transcripts`, upsert on `source_id`), computes content intelligence
+   (deterministic, grounded), generates requested formats in parallel, writes `outputs`, flips
+   `sources.status`. Refunds usage on platform-side failures.
+4. Dashboard polls `GET /api/sources` every 4s and re-kicks `/api/process` for queued jobs.
+5. Drafts edited/regenerated/copied in `/repurpose/[id]`; library at `/library`; prompts + brand
+   voice at `/branding`.
+
+## 6. Data model (summary)
+
+Source of truth: `supabase/migrations/`. Every user-owned table has per-user RLS
+(`auth.uid() = user_id`). Ledger/contract tables (`events`, `usage_events`, `subscriptions`,
+`subscription_events`, `profiles`) are service-role-write with no client policies.
+
+- `sources` — one input per row (`source_type: audio|video|youtube|transcript`; status
+  `uploaded|transcribing|transcribed|generating|done|failed`; `storage_path`/`source_url`;
+  `content_hash` dedupe).
+- `outputs` — one row per (source, format); `format: linkedin_post|newsletter|shortform_script`;
+  `regeneration_count`; **no client UPDATE policy**.
+- `jobs` — queue (`queued|running|done|failed`), `formats text[]`, `idempotency_key`, `refunded`.
+- `transcripts` — canonical transcript per source (`unique (source_id)`; provider
+  `assemblyai|youtube_captions|transcript_file`).
+- `user_prompts` — PK `(user_id, format)`; override or empty=default; `brand_voice` row.
+- `youtube_connections` / `buffer_connections` — OAuth, tokens AES-256-GCM encrypted, `unique(user_id)`.
+- `content_intelligence` — grounded analysis (`unique (source_id)`, jsonb + provenance).
+- `profiles` — plan (`beta|creator|pro|studio`) + `plan_status`; service-role write.
+- `events` — analytics ledger, no client policies. `usage_events` — `reserve|consume|refund|release`.
+- `subscriptions` / `subscription_events` — Paddle contract + log; `paddle_event_id` dedup.
+- `v4_agent_runs` — durable run (`created|planning|awaiting_approval|executing|evaluating|done|
+  failed|cancelled`), budgets + heartbeat.
+- `v4_agent_steps` — append-only timeline (`planning|source|generation|review|distribution|strategy`).
+- `v4_content_ideas` — planned angles (`approved`, `evaluation` jsonb).
+- `v4_agent_preferences` — memory (`unique (user_id)`, `edit_signals` jsonb).
+- `v4_distribution_jobs` — publish queue (`draft|scheduled|published|failed|cancelled`).
+- `v4_content_strategies` — strategy docs (`unique (user_id, title)`, `source: heuristic|planner|manual`).
+
+Key DB function `enqueue_job(...)`: one advisory-locked transaction per user doing idempotent
+replay → output-cap check → monthly-cap check → insert → `reserve` ledger write. `service_role`
+only.
+
+## 7. AI generation
+
+- Primary `gemini-3.6-flash`; fallback to OpenRouter `meta-llama/llama-3.3-70b-instruct` **only**
+  on quota/rate-limit errors. `lib/ai/generate.ts` wraps Gemini in `retryOnOverload` (90s budget).
+- Resolved prompt: custom per-format override > built-in `PROMPTS[format]`, brand voice layered on
+  top via `buildSystemPrompt(format, userPrompts)`.
+- Agent evaluator is deterministic (weighted rubric: length / format-shape / grounding) — no LLM
+  judge. Planner = single Gemini call.
+
+## 8. Plans & limits (lib/billing/plans.ts)
+
+| Plan | Jobs/mo | Max input | Outputs/job | Regens/output | Agent steps/cost/runtime |
+|---|---|---|---|---|---|
+| beta (free) | 5 | 30 min | 3 | 2 | 50 / 2500 / 1800s |
+| creator ($19) | 20 | 60 min | 5 | 5 | 60 / 5000 / 2700s |
+| pro ($49) | 75 | 180 min | 6 | 10 | 80 / 10000 / 3600s |
+| studio ($99) | ∞ | 600 min | 10 | 25 | 100 / 20000 / 5400s |
+
+Safety rails (env-overridable, `lib/limits.ts`): max file 200 MB, max duration 2 h, 10 enqueues/
+min/user, strict extension + MIME allowlists, YouTube URL validation with duration probe.
+
+## 9. Environment variables
+
+Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`.
+
+Optional: `ASSEMBLYAI_API_KEY` (file transcription), `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`
+(fallback), `NEXT_PUBLIC_SITE_URL` (referer), `YTDLP_JS_RUNTIME`/`YTDLP_DOWNLOAD_TIMEOUT_MS`
+(legacy yt-dlp), `MAX_SOURCE_FILE_MB`/`MAX_INPUT_SECONDS`/`REPURPOSE_RATE_LIMIT_PER_MIN`,
+`LOG_WEBHOOK_URL`/`LOG_LEVEL`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` +
+`YOUTUBE_TOKEN_ENCRYPTION_KEY` (YouTube OAuth), `BUFFER_CLIENT_ID`/`BUFFER_CLIENT_SECRET` +
+`BUFFER_TOKEN_ENCRYPTION_KEY` (Buffer OAuth), `NEXT_PUBLIC_APP_URL`, `PADDLE_API_KEY`/
+`PADDLE_WEBHOOK_SECRET`/`PADDLE_ENV`/`PADDLE_PRICE_ID_CREATOR|PRO|STUDIO`/`PADDLE_API_VERSION`
+(billing; inert without the first two).
+
+## 10. HTTP API reference
+
+All routes below are under the app origin. Most require a signed-in session (SSR auth cookie;
+no Authorization header). Full details: [docs/API.md](docs/API.md).
+
+### Core pipeline
+
+- `POST /api/repurpose` — enqueue a job. Body `{ sourceId, formats?, idempotencyKey? }` →
+  `{ ok, jobId, idempotent, usage }`. 400/401/404/409/429/503.
+- `POST /api/process` — worker, **SSE**. Body `{ jobId }`; events `progress|done|error`. Claims
+  atomically (queued or running > 10 min stale). Refunds platform failures.
+- `GET /api/sources` — `{ sources (with outputs[]), jobs (queued/running) }`.
+- `DELETE /api/sources/[id]` — delete source + storage object (cascades jobs/outputs) → `{ ok }`.
+- `PATCH /api/outputs/[id]` — edit content (service-role write; ≤ 100 000 chars; captures agent
+  edit signals) → `{ ok }`.
+- `POST /api/outputs/[id]/regenerate` — budgeted regeneration (429 on cap; releases on model
+  failure) → `{ content }`.
+
+### Prompts & brand voice
+
+- `GET /api/prompts` — `{ brand_voice, overrides }`.
+- `POST /api/prompts` — `{ format, prompt }`; empty prompt = restore default. ≤ 8000 chars.
+- `POST /api/prompts/analyze-voice` — synthesize brand voice from the user's own drafts;
+  `NOT_ENOUGH_DATA` if < 2 samples; never auto-saves.
+
+### Auth & account
+
+- `GET /api/auth/callback` — PKCE exchange; only `?next=reset-password` allowlisted; redirect.
+- `GET /api/account/export` — GDPR export `{ exportedAt, userId, sources, outputs, jobs, prompts }`.
+- `PATCH /api/account/delete` — admin-deletes the user (cascade) → `{ ok }`.
+
+### Recommendations
+
+- `GET /api/recommendations?sourceId=` — deterministic ranked recommendations from content
+  intelligence + objective → `{ recommendations, objective, sourceId }`.
+
+### Usage & billing
+
+- `GET /api/usage` — `{ usage }` snapshot (plan, used/limit, resetAt, limits).
+- `GET /api/usage/spend` — `{ spend, errorRate }`.
+- `POST /api/billing/checkout` — `{ plan }` → `{ url }`; 503 if unconfigured.
+- `POST /api/billing/webhook` — Paddle webhook; public, signature-verified (HMAC-SHA256, 5s
+  replay window), idempotent → `{ ok }`.
+
+### Analytics
+
+- `POST /api/events` — client bridge; `{ name, properties }` name must be allowlisted.
+
+### Agentic API
+
+- `POST /api/agent/runs` — create run `{ sourceId, mode? }` → `201 { ok, run }` (source must be
+  done/failed; budget snapshotted). `GET /api/agent/runs` — list (50, newest first).
+- `GET /api/agent/runs/[id]` — `{ run, ideas, steps, outputs, signals, monthlySpend }`.
+- `POST /api/agent/runs/[id]/approve` — human gate; `{ approval, ideas:[{id, approved, title?,
+  description?}] }`; run → executing/cancelled.
+- `POST /api/agent/runs/[id]/cancel` — cancel non-terminal; idempotent.
+- `POST /api/agent/process` — agent worker, **SSE**; `{ runId }`; resumes from parked state.
+- `GET|PUT /api/agent/preferences` — memory (explicit edits only; PUT records signals).
+- `POST /api/agent/preferences/confirm` — apply suggested tone `{ field:"tone", value }`.
+- `GET|POST /api/agent/strategy` — list / regenerate heuristic strategy seeds.
+- `GET|POST /api/agent/strategy/next` — "what next?" deterministic ranking (+ one bounded LLM
+  rationale on POST) → `{ ok, strategyId, recommended, ranked, exclusions, headroom, rationale,
+  monthlySpend }`.
+- `GET /api/agent/observe` — insights funnel + spend from real data; engagement flagged
+  unavailable until a channel is connected.
+- `GET /api/agent/scale` — permission-model surface (no autopilot door).
+- `GET /api/agent/queue` — publish queue `{ publishable, jobs, channelsConnected, … }`.
+- `POST /api/agent/queue/publish` — human-initiated send. `{ outputId, platform, confirm:true,
+  mode:"queue|send", profileIds?, scheduledAt? }`. `queue` = pending-approval `scheduled` job;
+  `send` = real Buffer post (503 `PUBLISH_NOT_CONNECTED`, 502 `PUBLISH_FAILED`). Never a
+  fabricated `published` state.
+
+### YouTube integration
+
+- `GET /api/integrations/youtube/connect` — redirect to Google consent (+ CSRF state cookie).
+- `GET /api/integrations/youtube/callback` — OAuth exchange; constant-time state check; redirects
+  to `/upload?youtube=…`.
+- `GET /api/integrations/youtube/status` — `{ connected, channelId, channelTitle }`.
+- `GET /api/integrations/youtube/videos` — user's uploads (25) for the picker.
+- `DELETE /api/integrations/youtube/disconnect` — remove connection + tokens.
+
+### Buffer integration
+
+- `GET /api/integrations/buffer/connect` — redirect to Buffer consent (PKCE S256; state+verifier
+  in an httpOnly cookie).
+- `GET /api/integrations/buffer/callback` — OAuth exchange → `/connections?success=buffer`.
+- `GET /api/integrations/buffer/profiles?platform=` — Buffer profiles (optionally by service id);
+  `PUBLISH_NOT_CONNECTED` / `PROFILES_FAILED` codes.
+- `DELETE /api/integrations/buffer/disconnect` — remove connection + tokens.
+
+### Error & SSE conventions
+
+- JSON errors: `{ "error": string }` (+ extras). Statuses: 400 invalid, 401 not signed in,
+  404 not found/owned, 409 wrong state, 429 rate/usage/regeneration limit, 500 server,
+  502 upstream (model/provider), 503 unavailable/not configured/migration missing.
+- Limit bodies include `{ code, limit, used, remaining, percent, resetAt }`.
+- Rate limits include `Retry-After` header + `retryAfter` in the body.
+- SSE: `text/event-stream`, `no-cache`; events `progress` `{stage,pct}`, `done` `{ok,skipped?}`,
+  `error` `{error}`. DB polling is the source of truth.
+
+See [docs/API.md](docs/API.md) for the exhaustive per-endpoint reference (request/response
+shapes, guard order, RLS notes, and the data model with storage layout).
+
+## 11. Agentic system — design invariants
+
+- Flow: `POST /api/agent/runs` → `POST /api/agent/process` (SSE) → `runPlanning` (one Gemini
+  call) → park at `awaiting_approval` → per-angle approve/reject → `runExecution` writes drafts
+  directly into `outputs` (they appear in `/library` + editor, no new viewer).
+- Deterministic evaluator: weighted rubric (length / format-shape / grounding), no LLM judge.
+- Autonomy static per mode: `assist` never revises; `execute` one bounded revision on flagged
+  drafts; `automate` adds `distribute` + `strategize`. Tool registry declares required modes.
+- Claim/resume mirrors the worker (10-min stale window; service client for claims/writes, user
+  client for ownership). `v4_agent_steps` is the durable audit timeline.
+- Publish is manual-approval only; agent distribution is gated by mode but a human-initiated send
+  from the publish queue is always real.
+
+## 12. Deployment & legal
+
+- Vercel project `vervai` (team `fragile-frogs`), alias `verv-ai.vercel.app`. Deploy:
+  `vercel link --scope fragile-frogs` then `vercel deploy --prod`. Runtime keys are encrypted env
+  vars on Vercel; `.env.local` is the local source of truth.
+- Caveat: Vercel serverless has no yt-dlp/ffmpeg, so the YouTube-URL fallback path only works on
+  hosts that provide them; file-upload + transcript paths work anywhere.
+- `/legal/terms` + `/legal/privacy` are plain-English policy pages (`components/legal-doc.tsx`);
+  both define a `CONTACT` placeholder email to swap before launch.

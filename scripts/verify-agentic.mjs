@@ -369,6 +369,44 @@ async function main() {
   check("B cannot delete A's Buffer connection", !bConnDel.error && Array.isArray(bConnDel.data) && bConnDel.data.length === 0, bConnDel.error?.message);
   void connId;
 
+  console.log("Stage 4 BYOB — drive_connections (encrypted token store):");
+  const driveId = await (async () => {
+    const { data, error } = await a
+      .from("drive_connections")
+      .insert({
+        user_id: aId,
+        drive_email: "agentic-e2e@example.test",
+        drive_name: "Agentic E2E",
+        refresh_token: "ENC_TEST_REFRESH_DRIVE"
+      })
+      .select("id")
+      .single();
+    check("A can insert their own Google Drive connection (with check RLS)", !error && data?.id, error?.message);
+    return data?.id;
+  })();
+
+  const { data: driveRead, error: driveReadErr } = await a
+    .from("drive_connections")
+    .select("drive_email, drive_name")
+    .eq("user_id", aId)
+    .single();
+  check(
+    "A can read back their own Google Drive connection",
+    !driveReadErr && driveRead?.drive_email === "agentic-e2e@example.test",
+    driveReadErr?.message
+  );
+
+  const dupeDrive = await a
+    .from("drive_connections")
+    .insert({ user_id: aId, drive_email: "x@example.test", drive_name: "x", refresh_token: "t" });
+  check("drive_connections enforces one row per user (unique user_id)", Boolean(dupeDrive.error), dupeDrive.error?.message);
+
+  const bDrive = await b.from("drive_connections").select("id").eq("user_id", aId);
+  check("B cannot read A's Google Drive connection", Array.isArray(bDrive.data) && bDrive.data.length === 0, bDrive.error?.message);
+  const bDriveDel = await b.from("drive_connections").delete().eq("user_id", aId).select();
+  check("B cannot delete A's Google Drive connection", !bDriveDel.error && Array.isArray(bDriveDel.data) && bDriveDel.data.length === 0, bDriveDel.error?.message);
+  void driveId;
+
   console.log("Cleanup cascade:");
   const delA = await admin.auth.admin.deleteUser(aId);
   check("admin can delete user A", !delA.error, delA.error?.message);
@@ -376,6 +414,8 @@ async function main() {
   check("A's agent runs cascade-delete when the user is deleted", Array.isArray(remaining.data) && remaining.data.length === 0);
   const remainingConn = await admin.from("buffer_connections").select("id").eq("user_id", aId);
   check("A's Buffer connection cascade-deletes with the user", Array.isArray(remainingConn.data) && remainingConn.data.length === 0);
+  const remainingDrive = await admin.from("drive_connections").select("id").eq("user_id", aId);
+  check("A's Google Drive connection cascade-deletes with the user", Array.isArray(remainingDrive.data) && remainingDrive.data.length === 0);
 }
 
 try {

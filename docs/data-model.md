@@ -15,6 +15,8 @@ level security enabled; app code never stores secrets in plaintext.
 | `jobs` | Async reprocessing queue (enqueue → claim → done/failed) | `id` | View/insert/update own |
 | `user_prompts` | Per-format prompt overrides + global `brand_voice` row | composite `(user_id, format)` | View/insert/update/delete own |
 | `youtube_connections` | One OAuth connection per user (tokens AES-GCM encrypted) | `id`, `unique (user_id)` | View/insert/update/delete own |
+| `buffer_connections` | One BYOB Buffer connection per user (tokens AES-GCM encrypted) | `id`, `unique (user_id)` | View/insert/update/delete own |
+| `drive_connections` | One Google Drive connection per user (tokens AES-GCM encrypted) | `id`, `unique (user_id)` | View/insert/update/delete own |
 | `transcripts` | Canonical ingested transcript per source (upsert on `source_id`) | `id`, `unique (source_id)` | View/insert/update own |
 | `profiles` | Billing plan per user; auto-created by `handle_new_user` trigger | `user_id` | View own only. **Not client-writable** (service role only) |
 | `events` | Product analytics ledger (allowlisted names) | identity `id` | RLS on with **no policies** — service-role write, client read- and write-blocked |
