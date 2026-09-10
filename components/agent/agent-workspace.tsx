@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import EmptyState from "@/components/empty-state";
 import type { AgentMode } from "@/types/agent";
 import OutcomeComposer from "./outcome-composer";
-import RunList from "./run-list";
 import RunDetail from "./run-detail";
 
 export interface AgentSource {
@@ -20,8 +19,11 @@ export interface AgentSource {
 // v4_agent_runs + v4_agent_steps. The session's `goals` map is display-only —
 // the durable run row keeps its source-linked identity.
 //
-// Layout is a bento grid: composer (wide, top-left), run detail (wide, below),
-// history (tall rail on the right). Starting a run also starts the worker, so
+// Layout is a 2-column grid. Empty state: the composer spans the full width.
+// With a run loaded (created here or deep-linked via ?run=): composer top-left,
+// the Progress panel appears on the right, and the row below shows the decision
+// trail (left) beside the budget (right). There is no history rail — past runs
+// are re-opened by their deep link. Starting a run also starts the worker, so
 // the run advances to its plan without a manual "Resume" kick.
 
 export default function AgentWorkspace({
@@ -116,45 +118,58 @@ export default function AgentWorkspace({
       : defaultSourceId;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      {/* Composer — the workspace's entry point */}
-      <section className="lg:col-span-2 lg:row-start-1">
-        <OutcomeComposer
-          sources={sources}
-          defaultSourceId={effectiveDefaultSourceId}
-          initialGoal={initialGoal}
-          initialMode={initialMode}
-          busy={busy}
-          error={error}
-          onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}
-          onExploreOpportunities={() => router.push("/agent/observe")}
-        />
-      </section>
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      {runId ? (
+        <>
+          {/* Composer — entry point, top-left while a run is loaded */}
+          <section className="lg:col-start-1 lg:row-start-1">
+            <OutcomeComposer
+              sources={sources}
+              defaultSourceId={effectiveDefaultSourceId}
+              initialGoal={initialGoal}
+              initialMode={initialMode}
+              busy={busy}
+              error={error}
+              onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}
+              onExploreOpportunities={() => router.push("/agent/observe")}
+            />
+          </section>
 
-      {/* Run detail — the selected run's plan / progress / drafts */}
-      <section className="lg:col-span-2 lg:row-start-2" aria-live="polite">
-        {runId ? (
+          {/* The selected run's panels: RunDetail places itself in the left
+              (decision trail — row 2) and right (Progress + Budget rail) cells. */}
           <RunDetail runId={runId} goal={goals[runId]} onChange={handleDetailChange} />
-        ) : (
-          <EmptyState
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-5" aria-hidden="true">
-                <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
-                <path d="M19 11a7 7 0 0 1-14 0" />
-                <path d="M12 18v3" />
-                <path d="M8 21h8" />
-              </svg>
-            }
-            title="No run loaded"
-            description="Start a VervAI run, or pick one from history — its plan, progress and drafts appear here."
-          />
-        )}
-      </section>
-
-      {/* History — durable runs, resume picks up where one parked */}
-      <aside className="lg:col-span-1 lg:row-span-2">
-        <RunList runId={runId} goals={goals} onSelect={setRunId} onKick={kickRun} />
-      </aside>
+        </>
+      ) : (
+        <>
+          {/* Empty state: composer full width, no right-hand progress panel */}
+          <section className="lg:col-span-2">
+            <OutcomeComposer
+              sources={sources}
+              defaultSourceId={effectiveDefaultSourceId}
+              initialGoal={initialGoal}
+              initialMode={initialMode}
+              busy={busy}
+              error={error}
+              onStart={(goal, _intent, sourceId, mode) => startRun(sourceId, mode, goal)}
+              onExploreOpportunities={() => router.push("/agent/observe")}
+            />
+          </section>
+          <section className="lg:col-span-2" aria-live="polite">
+            <EmptyState
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-5" aria-hidden="true">
+                  <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+                  <path d="M19 11a7 7 0 0 1-14 0" />
+                  <path d="M12 18v3" />
+                  <path d="M8 21h8" />
+                </svg>
+              }
+              title="No run loaded"
+              description="Start a VervAI run — its progress, decision trail and drafts appear here."
+            />
+          </section>
+        </>
+      )}
     </div>
   );
 }

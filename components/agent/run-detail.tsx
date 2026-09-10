@@ -206,7 +206,11 @@ export default function RunDetail({
   }
 
   if (!data) {
-    return <Card><p className="px-5 py-8 text-sm text-theme-text-secondary">Loading run…</p></Card>;
+    return (
+      <section className="animate-fade-in lg:col-start-1 lg:row-start-2">
+        <Card><p className="px-5 py-8 text-sm text-theme-text-secondary">Loading run…</p></Card>
+      </section>
+    );
   }
 
   const { run, ideas, steps, outputs, signals, monthlySpend } = data;
@@ -228,33 +232,40 @@ export default function RunDetail({
 
   const approvedIdeas = ideas.filter((i) => i.approved).length;
 
+  // Two grid cells into the workspace's 2-column grid: the main column holds
+  // the run state + approval gate + decision trail + drafts; the right rail
+  // holds the Progress panel and Budget for as long as a run is loaded.
   return (
-    <div key={run.id} className="space-y-6 animate-fade-in">
-      {error && <p className="text-sm text-red-600">{error}</p>}
+    <>
+      <section
+        key={run.id}
+        className="space-y-6 animate-fade-in lg:col-start-1 lg:row-start-2"
+        aria-live="polite"
+      >
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <AgentProgressDots status={run.status} />
-        <span className={`badge ${AGENT_STATUS_STYLE[run.status] ?? "bg-neutral-100 text-neutral-700"}`}>
-          {AGENT_STATUS_LABEL[run.status] ?? run.status}
-        </span>
-        {IN_FLIGHT.includes(run.status) && (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500" aria-hidden="true">
-            <span className="size-1.5 rounded-full bg-primary-500 animate-pulse-soft" />
-            live
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <AgentProgressDots status={run.status} />
+          <span className={`badge ${AGENT_STATUS_STYLE[run.status] ?? "bg-neutral-100 text-neutral-700"}`}>
+            {AGENT_STATUS_LABEL[run.status] ?? run.status}
           </span>
+          {IN_FLIGHT.includes(run.status) && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500" aria-hidden="true">
+              <span className="size-1.5 rounded-full bg-primary-500 animate-pulse-soft" />
+              live
+            </span>
+          )}
+        </div>
+
+        {goal && (
+          <p className="text-xs text-theme-text-secondary">
+            Objective: <span className="text-theme-text-primary">“{goal}”</span>
+          </p>
         )}
-      </div>
 
-      {goal && (
-        <p className="text-xs text-theme-text-secondary">
-          Objective: <span className="text-theme-text-primary">“{goal}”</span>
-        </p>
-      )}
+        {busy && <p className="text-sm text-theme-text-secondary">Working… the run survives restarts; this screen catches up from the DB.</p>}
 
-      {busy && <p className="text-sm text-theme-text-secondary">Working… the run survives restarts; this screen catches up from the DB.</p>}
-
-      {waiting ? (
-        <>
+        {waiting ? (
           <PlanView
             plan={run.plan}
             ideas={ideas}
@@ -262,221 +273,221 @@ export default function RunDetail({
             onApprove={approve}
             onReject={rejectAll}
           />
-          <Timeline
-            steps={steps}
-            status={run.status}
-            totalIdeas={ideas.length}
-            approvedIdeas={approvedIdeas}
-          />
-        </>
-      ) : (
-        <>
-          {/* ── Decision trail: planned angles with scores + decisions ─── */}
-          {run.plan && ideas.length > 0 && (
-            <Card>
-              <CardHeader
-                title="Decision trail"
-                description={run.plan.summary}
-              />
-              <ul className="divide-y divide-theme-divider">
-                {ideas.map((idea, index) => (
-                  <li key={idea.id} className="flex gap-4 px-5 py-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="text-xs font-medium text-theme-text-secondary">#{index + 1}</span>
-                        <h3 className="font-display text-sm font-semibold">{idea.title}</h3>
-                        <span className={`badge ${idea.approved ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-500"}`}>
-                          {idea.approved ? "approved" : "rejected"}
+        ) : (
+          <>
+            {/* ── Decision trail: planned angles with scores + decisions ─── */}
+            {run.plan && ideas.length > 0 && (
+              <Card>
+                <CardHeader
+                  title="Decision trail"
+                  description={run.plan.summary}
+                />
+                <ul className="divide-y divide-theme-divider">
+                  {ideas.map((idea, index) => (
+                    <li key={idea.id} className="flex gap-4 px-5 py-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-xs font-medium text-theme-text-secondary">#{index + 1}</span>
+                          <h3 className="font-display text-sm font-semibold">{idea.title}</h3>
+                          <span className={`badge ${idea.approved ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-500"}`}>
+                            {idea.approved ? "approved" : "rejected"}
+                          </span>
+                        </div>
+                        {idea.description && <p className="mt-1 text-sm text-theme-text-secondary">{idea.description}</p>}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {idea.suggested_formats.map((fmt) => (
+                            <span key={fmt} className="badge bg-primary-100 text-primary-500">
+                              {fmt.replace(/_/g, " ")}
+                            </span>
+                          ))}
+                        </div>
+                        {idea.rationale && (
+                          <p className="mt-2 text-xs text-theme-text-secondary">Why: {idea.rationale}</p>
+                        )}
+                        {/* P3 idea scores */}
+                        {idea.evaluation && typeof idea.evaluation.score === "number" && (
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-theme-text-secondary">
+                            <span>Score {Math.round(idea.evaluation.score * 100)}%</span>
+                            {typeof idea.evaluation.grounding === "number" && (
+                              <span>Grounding {Math.round(idea.evaluation.grounding * 100)}%</span>
+                            )}
+                            {typeof idea.evaluation.distinctness === "number" && (
+                              <span>Distinctness {Math.round(idea.evaluation.distinctness * 100)}%</span>
+                            )}
+                            {typeof idea.evaluation.specificity === "number" && (
+                              <span>Specificity {Math.round(idea.evaluation.specificity * 100)}%</span>
+                            )}
+                            {idea.evaluation.weakness && (
+                              <span className="text-amber-600">{idea.evaluation.weakness}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            {outputs.length > 0 && (
+              <Card>
+                <CardHeader title="Generated drafts" description="Written to your content library — open them in the editor to refine your VervAI drafts." />
+                <ul className="divide-y divide-theme-divider">
+                  {outputs.map((o) => (
+                    <li key={o.id} className="px-5 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="badge bg-primary-100 text-primary-500">{FORMAT_LABEL[o.format] ?? o.format}</span>
+                        <a href={`/repurpose/${o.id}`} className="text-xs text-primary-500 hover:text-primary-700">
+                          Open in editor →
+                        </a>
+                      </div>
+                      <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-theme-text-secondary">{o.content}</p>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            {/* ── P7: Edit-learning readout (what VervAI remembers) ──── */}
+            {signals.length > 0 && (
+              <Card>
+                <CardHeader
+                  title="What VervAI remembers"
+                  description="Recent signals from your edits and angle decisions."
+                />
+                <ul className="divide-y divide-theme-divider">
+                  {signals.slice(-6).reverse().map((s, i) => (
+                    <li key={i} className="flex items-start justify-between gap-3 px-5 py-3 text-xs">
+                      <div className="min-w-0">
+                        <span className="font-medium">
+                          {s.kind === "edit" && "Edit"}
+                          {s.kind === "angle_decision" && s.whatChanged === "approved" && "Kept angle"}
+                          {s.kind === "angle_decision" && s.whatChanged === "rejected" && "Rejected angle"}
+                          {s.kind === "preference" && "Preference change"}
+                        </span>
+                        <span className="text-theme-text-secondary">
+                          {" "}— {s.outputId}
+                          {s.whatChanged !== "approved" && s.whatChanged !== "rejected" && `: ${s.whatChanged}`}
                         </span>
                       </div>
-                      {idea.description && <p className="mt-1 text-sm text-theme-text-secondary">{idea.description}</p>}
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {idea.suggested_formats.map((fmt) => (
-                          <span key={fmt} className="badge bg-primary-100 text-primary-500">
-                            {fmt.replace(/_/g, " ")}
-                          </span>
-                        ))}
-                      </div>
-                      {idea.rationale && (
-                        <p className="mt-2 text-xs text-theme-text-secondary">Why: {idea.rationale}</p>
-                      )}
-                      {/* P3 idea scores */}
-                      {idea.evaluation && typeof idea.evaluation.score === "number" && (
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-theme-text-secondary">
-                          <span>Score {Math.round(idea.evaluation.score * 100)}%</span>
-                          {typeof idea.evaluation.grounding === "number" && (
-                            <span>Grounding {Math.round(idea.evaluation.grounding * 100)}%</span>
-                          )}
-                          {typeof idea.evaluation.distinctness === "number" && (
-                            <span>Distinctness {Math.round(idea.evaluation.distinctness * 100)}%</span>
-                          )}
-                          {typeof idea.evaluation.specificity === "number" && (
-                            <span>Specificity {Math.round(idea.evaluation.specificity * 100)}%</span>
-                          )}
-                          {idea.evaluation.weakness && (
-                            <span className="text-amber-600">{idea.evaluation.weakness}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+                      <span className="shrink-0 text-theme-text-secondary">
+                        {new Date(s.at).toLocaleString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
 
-          <Timeline
-            steps={steps}
-            status={run.status}
-            totalIdeas={ideas.length}
-            approvedIdeas={approvedIdeas}
+            {IN_FLIGHT.includes(run.status) && (
+              <button type="button" onClick={kick} disabled={busy} className="btn btn-primary disabled:opacity-50">
+                {run.status === "planning" ? "Kick planning worker" : "Resume run"}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* Right rail: Progress (shown whenever a run is loaded) + Budget */}
+      <aside
+        key={run.id}
+        className="space-y-6 animate-fade-in lg:col-start-2 lg:row-start-1 lg:row-span-2"
+      >
+        <Timeline
+          steps={steps}
+          status={run.status}
+          totalIdeas={ideas.length}
+          approvedIdeas={approvedIdeas}
+        />
+
+        {/* ── P8+P9: Run budget (collapsed; full metrics behind "View details") ── */}
+        <Card>
+          <CardHeader
+            title="Budget"
+            description="This run's allowance in plain terms."
           />
+          <div className="px-5 py-4">
+            <p className="text-sm text-theme-text-secondary">
+              {run.cost_units > 0
+                ? budgetSummaryLine({
+                    costUsd: spendSummary.estimatedCostUsd,
+                    maxCostUnits: run.max_cost_units || null
+                  })
+                : "No spend recorded yet"}
+            </p>
 
-          {outputs.length > 0 && (
-            <Card>
-              <CardHeader title="Generated drafts" description="Written to your content library — open them in the editor to refine your VervAI drafts." />
-              <ul className="divide-y divide-theme-divider">
-                {outputs.map((o) => (
-                  <li key={o.id} className="px-5 py-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="badge bg-primary-100 text-primary-500">{FORMAT_LABEL[o.format] ?? o.format}</span>
-                      <a href={`/repurpose/${o.id}`} className="text-xs text-primary-500 hover:text-primary-700">
-                        Open in editor →
-                      </a>
-                    </div>
-                    <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-theme-text-secondary">{o.content}</p>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {/* ── P7: Edit-learning readout (what VervAI remembers) ──── */}
-          {signals.length > 0 && (
-            <Card>
-              <CardHeader
-                title="What VervAI remembers"
-                description="Recent signals from your edits and angle decisions."
-              />
-              <ul className="divide-y divide-theme-divider">
-                {signals.slice(-6).reverse().map((s, i) => (
-                  <li key={i} className="flex items-start justify-between gap-3 px-5 py-3 text-xs">
-                    <div className="min-w-0">
-                      <span className="font-medium">
-                        {s.kind === "edit" && "Edit"}
-                        {s.kind === "angle_decision" && s.whatChanged === "approved" && "Kept angle"}
-                        {s.kind === "angle_decision" && s.whatChanged === "rejected" && "Rejected angle"}
-                        {s.kind === "preference" && "Preference change"}
-                      </span>
-                      <span className="text-theme-text-secondary">
-                        {" "}— {s.outputId}
-                        {s.whatChanged !== "approved" && s.whatChanged !== "rejected" && `: ${s.whatChanged}`}
-                      </span>
-                    </div>
-                    <span className="shrink-0 text-theme-text-secondary">
-                      {new Date(s.at).toLocaleString(undefined, { month: "short", day: "numeric" })}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {/* ── P8+P9: Run budget (collapsed; full metrics behind "View details") ── */}
-          <Card>
-            <CardHeader
-              title="Budget"
-              description="This run's allowance in plain terms."
-            />
-            <div className="px-5 py-4">
-              <p className="text-sm text-theme-text-secondary">
-                {run.cost_units > 0
-                  ? budgetSummaryLine({
-                      costUsd: spendSummary.estimatedCostUsd,
-                      maxCostUnits: run.max_cost_units || null
-                    })
-                  : "No spend recorded yet"}
+            {monthlySpend && monthlySpend.runsThisMonth > 0 && (
+              <p className="mt-1 text-xs text-theme-text-secondary">
+                {monthlySpend.runsThisMonth} run{monthlySpend.runsThisMonth === 1 ? "" : "s"} this month ·{" "}
+                est. {formatCostUsd(monthlySpend.estimatedCostUsd)} ·{" "}
+                {monthlySpend.totalInputTokens.toLocaleString()} input +{" "}
+                {monthlySpend.totalOutputTokens.toLocaleString()} output tokens
               </p>
+            )}
 
-              {monthlySpend && monthlySpend.runsThisMonth > 0 && (
-                <p className="mt-1 text-xs text-theme-text-secondary">
-                  {monthlySpend.runsThisMonth} run{monthlySpend.runsThisMonth === 1 ? "" : "s"} this month ·{" "}
-                  est. {formatCostUsd(monthlySpend.estimatedCostUsd)} ·{" "}
-                  {monthlySpend.totalInputTokens.toLocaleString()} input +{" "}
-                  {monthlySpend.totalOutputTokens.toLocaleString()} output tokens
-                </p>
-              )}
+            <details className="group mt-3 border-t border-theme-divider pt-3">
+              <summary className="cursor-pointer list-none text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary">
+                <span className="underline">View details</span>
+              </summary>
+              <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
+                <div>
+                  <p className="text-theme-text-secondary">Steps</p>
+                  <p className="mt-0.5 font-medium">{run.step_count} / {run.max_steps}</p>
+                </div>
+                <div>
+                  <p className="text-theme-text-secondary">Cost units</p>
+                  <p className="mt-0.5 font-medium">{formatCostUnits(run.cost_units)} / {run.max_cost_units}</p>
+                </div>
+                <div>
+                  <p className="text-theme-text-secondary">Runtime</p>
+                  <p className="mt-0.5 font-medium">
+                    {run.max_runtime_s}s max
+                  </p>
+                </div>
+              </div>
 
-              <details className="group mt-3 border-t border-theme-divider pt-3">
-                <summary className="cursor-pointer list-none text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary">
-                  <span className="underline">View details</span>
-                </summary>
-                <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <p className="text-theme-text-secondary">Steps</p>
-                    <p className="mt-0.5 font-medium">{run.step_count} / {run.max_steps}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-secondary">Cost units</p>
-                    <p className="mt-0.5 font-medium">{formatCostUnits(run.cost_units)} / {run.max_cost_units}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-secondary">Runtime</p>
-                    <p className="mt-0.5 font-medium">
-                      {run.max_runtime_s}s max
-                    </p>
+              {run.cost_units > 0 && run.max_cost_units > 0 && (
+                <div className="mt-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+                    <div
+                      className="h-full rounded-full bg-primary-500"
+                      style={{ width: `${spendSummary.budgetPercentUsed}%` }}
+                    />
                   </div>
                 </div>
+              )}
 
-                {run.cost_units > 0 && run.max_cost_units > 0 && (
-                  <div className="mt-3">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                      <div
-                        className="h-full rounded-full bg-primary-500"
-                        style={{ width: `${spendSummary.budgetPercentUsed}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+              {/* P9: Estimated spend (token-derived — never claimed as real $) */}
+              {spendSummary.hasActualTokens && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-theme-text-secondary">Estimated spend</p>
+                  <p className="mt-0.5 text-xs text-theme-text-secondary">
+                    {formatCostUsd(spendSummary.estimatedCostUsd)} est. · {spendSummary.totalInputTokens.toLocaleString()} input + {spendSummary.totalOutputTokens.toLocaleString()} output tokens · <span className="italic">published-rate estimate</span>
+                  </p>
+                </div>
+              )}
 
-                {/* P9: Estimated spend (token-derived — never claimed as real $) */}
-                {spendSummary.hasActualTokens && (
-                  <div className="mt-3">
-                    <p className="text-xs font-medium text-theme-text-secondary">Estimated spend</p>
-                    <p className="mt-0.5 text-xs text-theme-text-secondary">
-                      {formatCostUsd(spendSummary.estimatedCostUsd)} est. · {spendSummary.totalInputTokens.toLocaleString()} input + {spendSummary.totalOutputTokens.toLocaleString()} output tokens · <span className="italic">published-rate estimate</span>
-                    </p>
-                  </div>
-                )}
-
-                {/* P9: Per-step breakdown (cheapest path) */}
-                {stepSpends.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-xs font-medium text-theme-text-secondary">Per-step token usage</p>
-                    <ul className="mt-1.5 space-y-1">
-                      {stepSpends.map((s) => (
-                        <li key={s.stepId} className="flex items-center justify-between text-xs text-theme-text-secondary">
-                          <span className="truncate">{s.label ?? s.kind}</span>
-                          <span className="shrink-0 ml-2">
-                            {s.inputTokens.toLocaleString()}+{s.outputTokens.toLocaleString()} tokens
-                            <span className="ml-1 italic">({spendSourceLabel(s.source)})</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </details>
-            </div>
-          </Card>
-
-          {IN_FLIGHT.includes(run.status) && (
-            <button type="button" onClick={kick} disabled={busy} className="btn btn-primary disabled:opacity-50">
-              {run.status === "planning" ? "Kick planning worker" : "Resume run"}
-            </button>
-          )}
-        </>
-      )}
-    </div>
+              {/* P9: Per-step breakdown (cheapest path) */}
+              {stepSpends.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-theme-text-secondary">Per-step token usage</p>
+                  <ul className="mt-1.5 space-y-1">
+                    {stepSpends.map((s) => (
+                      <li key={s.stepId} className="flex items-center justify-between text-xs text-theme-text-secondary">
+                        <span className="truncate">{s.label ?? s.kind}</span>
+                        <span className="shrink-0 ml-2">
+                          {s.inputTokens.toLocaleString()}+{s.outputTokens.toLocaleString()} tokens
+                          <span className="ml-1 italic">({spendSourceLabel(s.source)})</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </details>
+          </div>
+        </Card>
+      </aside>
+    </>
   );
 }
