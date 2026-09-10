@@ -77,7 +77,10 @@ export function generatePkceChallenge(verifier: string): string {
 // incoming Host header; locally it falls back to the request origin (which must
 // itself be registered as a redirect URI in the Buffer app console).
 export function appBaseUrl(request: Request): string {
-  return process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+  // Normalize away a trailing slash in NEXT_PUBLIC_APP_URL: the redirect URI is
+  // built by path-splicing, and Buffer/Google match redirect_uri exactly against
+  // the registered URI — a stray "/" makes every OAuth connect fail.
+  return (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/+$/, "");
 }
 
 export function bufferOAuthRedirectUri(request: Request): string {
