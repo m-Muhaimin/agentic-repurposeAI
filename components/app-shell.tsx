@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 import Logo from "./logo";
 import CreateMenu from "./create-menu";
+import UserMenu from "./user-menu";
 
 type NavItem = {
   label: string;
@@ -25,7 +25,7 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -46,7 +46,7 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
@@ -67,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <path d="m12 2 10 5-10 5L2 7 12 2Z" />
@@ -87,7 +87,7 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <path d="M17 8l4-4m0 0-4-4m4 4h-9a6 6 0 0 0-6 6v7" />
@@ -106,7 +106,7 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <path d="M3 3v18h18" />
@@ -125,70 +125,11 @@ const NAV_ITEMS: NavItem[] = [
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[18px]"
+        className="size-[16px]"
         aria-hidden="true"
       >
         <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
         <path d="M1 14h6M9 8h6M17 16h6" />
-      </svg>
-    )
-  },
-  {
-    label: "Channels",
-    href: "/connections",
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-[18px]"
-        aria-hidden="true"
-      >
-        <path d="M12 22v-5" />
-        <path d="M9 8V2" />
-        <path d="M15 8V2" />
-        <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
-      </svg>
-    )
-  },
-  {
-    label: "Plan & usage",
-    href: "/settings/usage",
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-[18px]"
-        aria-hidden="true"
-      >
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <path d="M2 10h20" />
-      </svg>
-    )
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-[18px]"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     )
   }
@@ -196,10 +137,10 @@ const NAV_ITEMS: NavItem[] = [
 
 const NAV_HREFS = NAV_ITEMS.map((item) => item.href);
 
-// Longest prefix wins, so `/settings/usage` keeps "Plan & usage" active while
-// "Settings" stays active only on its exact page. Subtree routes that aren't
-// nav entries map back to their parent — the editor (`/repurpose/*`) resolves
-// to Content library — so the user never loses orientation.
+// Longest prefix wins, so subtree routes map back to their parent — the editor
+// (`/repurpose/*`) resolves to Content library — so the user never loses
+// orientation. Settings/Channels/Plan & usage moved to the top-bar account menu
+// and are no longer sidebar items.
 function resolveActiveHref(pathname: string): string {
   if (pathname.startsWith("/repurpose/")) return "/library";
   let best: string | null = null;
@@ -209,6 +150,32 @@ function resolveActiveHref(pathname: string): string {
     }
   }
   return best ?? "";
+}
+
+// Page titles for the sticky top bar, ordered longest-prefix last-match wins.
+const TOP_BAR_TITLES: Array<[string, string]> = [
+  ["/content", "Content calendar"],
+  ["/agent/observe", "AI insights"],
+  ["/settings/usage", "Plan & usage"],
+  ["/repurpose", "Content library"],
+  ["/dashboard", "Overview"],
+  ["/agent", "Agent"],
+  ["/library", "Content library"],
+  ["/publish", "Publish queue"],
+  ["/branding", "Brand & voice"],
+  ["/connections", "Channels"],
+  ["/settings", "Settings"],
+  ["/upload", "Create from content"]
+];
+
+function resolveTopBarTitle(pathname: string): string {
+  let best: [string, string] | null = null;
+  for (const entry of TOP_BAR_TITLES) {
+    if (pathname === entry[0] || pathname.startsWith(`${entry[0]}/`)) {
+      if (best === null || entry[0].length > best[0].length) best = entry;
+    }
+  }
+  return best?.[1] ?? "VervAI";
 }
 
 function NavLinks({
@@ -239,72 +206,26 @@ function NavLinks({
 function SidebarContent({
   isActive,
   onNavigate,
-  onClose,
   createMenu,
   topBarRight
 }: {
   isActive: (href: string) => boolean;
   onNavigate?: () => void;
-  onClose?: () => void;
   createMenu?: React.ReactNode;
   topBarRight?: React.ReactNode;
 }) {
-  const router = useRouter();
-  const supabase = createClient();
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   return (
     <>
-      <div className="flex items-center justify-between px-6 py-6">
+      <div className="flex items-center justify-between px-5 pt-5 pb-1">
         <Logo href="/dashboard" />
         {topBarRight}
       </div>
 
-      {createMenu && <div className="px-4 pb-1 pt-4">{createMenu}</div>}
+      {createMenu && <div className="px-3 pt-3">{createMenu}</div>}
 
-      <nav className="flex flex-1 flex-col gap-1 px-4 py-2">
+      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-3">
         <NavLinks isActive={isActive} onNavigate={onNavigate} />
       </nav>
-
-      <div className="border-t border-theme-divider px-4 py-4">
-        <button
-          type="button"
-          onClick={() => {
-            onClose?.();
-            handleSignOut();
-          }}
-          className="side-nav-link text-left"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-[18px]"
-            aria-hidden="true"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <path d="M16 17l5-5-5-5" />
-            <path d="M21 12H9" />
-          </svg>
-          Log out
-        </button>
-        <nav className="mt-2 flex gap-3 px-4 text-xs text-theme-text-secondary">
-          <Link href="/legal/terms" className="hover:text-theme-text-primary hover:underline">
-            Terms
-          </Link>
-          <Link href="/legal/privacy" className="hover:text-theme-text-primary hover:underline">
-            Privacy
-          </Link>
-        </nav>
-      </div>
     </>
   );
 }
@@ -314,6 +235,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeHref = resolveActiveHref(pathname);
+  const title = resolveTopBarTitle(pathname);
   const isActive = (href: string) => href === activeHref;
 
   // Close the drawer on route change.
@@ -352,16 +274,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarContent isActive={isActive} createMenu={<CreateMenu />} />
       </aside>
 
-      {/* Mobile top bar */}
+      {/* Content column: sticky top bar + page */}
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-theme-divider bg-theme-bg-paper px-4 py-3 lg:hidden">
-          <span className="text-lg font-bold text-theme-text-primary">VervAI</span>
-          <div className="flex items-center gap-2">
-            <CreateMenu variant="topbar" />
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-theme-divider bg-theme-bg-paper/95 px-4 py-2.5 backdrop-blur lg:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="nav-link min-h-[44px]"
+              className="nav-link -ml-2 lg:hidden"
               aria-label="Open menu"
               aria-expanded={sidebarOpen}
               aria-controls="mobile-sidebar"
@@ -379,6 +299,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
+            <h1 className="truncate font-display text-[17px] font-bold tracking-tight text-theme-text-primary">
+              {title}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="lg:hidden">
+              <CreateMenu variant="topbar" />
+            </div>
+            <UserMenu />
           </div>
         </header>
 
@@ -410,7 +340,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(false)}
-                  className="nav-link min-h-[44px]"
+                  className="nav-link -mr-2 min-h-[34px]"
                   aria-label="Close menu"
                 >
                   <svg

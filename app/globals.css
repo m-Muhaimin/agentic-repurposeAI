@@ -101,7 +101,7 @@
   }
 
   .side-nav-link {
-    @apply flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 py-2 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
+    @apply flex min-h-[34px] w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-[14px] font-medium text-theme-text-secondary transition-colors hover:bg-primary-500/[0.04] hover:text-theme-text-primary;
   }
 
   .side-nav-link.active {
