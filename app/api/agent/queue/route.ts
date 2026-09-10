@@ -8,6 +8,7 @@ import {
   NOT_CONNECTED_MESSAGE
 } from "@/lib/agent/publish";
 import type { PublishJobStatus } from "@/lib/agent/publish";
+import { getApiKey } from "@/lib/buffer/connections";
 import { log } from "@/lib/logger";
 
 // GET /api/agent/queue — the read-mostly Publish queue surface (P10).
@@ -42,7 +43,10 @@ export async function GET() {
 
   // Real gate: is a Buffer channel connected for this user? One DB query, shared
   // by the job reasons below and the payload's channelsConnected field.
-  const channelsConnected = await publishingChannelsConnected(user.id, service);
+  const [channelsConnected, hasApiKey] = await Promise.all([
+    publishingChannelsConnected(user.id, service),
+    getApiKey(user.id).catch(() => null)
+  ]);
 
   const [runsResult, jobsResult] = await Promise.all([
     service
@@ -123,6 +127,7 @@ export async function GET() {
     publishable,
     jobs: jobViews,
     channelsConnected,
+    hasApiKey: Boolean(hasApiKey),
     notConnectedMessage: NOT_CONNECTED_MESSAGE,
     historyWindowMs: RETENTION_DEFAULTS.QUEUE_HISTORY_MS,
     // Honest "history is retained" note — bounded query window, no data loss.

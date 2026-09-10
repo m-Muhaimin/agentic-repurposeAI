@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader } from "@/components/card";
 import EmptyState from "@/components/empty-state";
 import { FORMAT_LABEL, type OutputFormat } from "@/types/agent";
+import BufferPostPicker from "./buffer-post-picker";
 
 // Publish queue surface (P10). READ-MOSTLY + manual approval. This panel:
 //   - lists real publishable drafts (from done runs' output_ids) and the user's
@@ -50,6 +52,7 @@ interface QueueData {
   publishable: QueueDraft[];
   jobs: QueueJob[];
   channelsConnected: boolean;
+  hasApiKey: boolean;
   notConnectedMessage: string;
   historyWindowMs: number;
   note: string;
@@ -58,6 +61,7 @@ interface QueueData {
 const PLATFORMS = ["linkedin", "x", "newsletter", "youtube_shorts", "tiktok", "instagram"] as const;
 
 export default function PublishQueuePanel() {
+  const router = useRouter();
   const [data, setData] = useState<QueueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,7 +202,9 @@ export default function PublishQueuePanel() {
         description={
           data?.channelsConnected
             ? "Queued drafts, awaiting your approval to send to Buffer."
-            : "Read-mostly. Nothing is published from here yet."
+            : data?.hasApiKey
+              ? "Agent scheduling is live via your Buffer API key. Connect a Buffer account to also send from here by hand."
+              : "Nothing is published from here automatically. Connect a Buffer account to enable sends."
         }
         action={
           <button
@@ -233,8 +239,10 @@ export default function PublishQueuePanel() {
           {!data.channelsConnected && (
             <div className="border-b border-theme-divider px-5 py-3">
               <p className="text-xs text-theme-text-secondary">
-                <span className="badge bg-neutral-200 text-neutral-600">not connected</span>{" "}
-                {data.notConnectedMessage}
+                <span className="badge bg-neutral-200 text-neutral-600">no Buffer account</span>{" "}
+                {data.hasApiKey
+                  ? "Scheduling to the queue works (automate) via your Buffer API key. Manual sends from below need a connected Buffer account."
+                  : data.notConnectedMessage}
               </p>
             </div>
           )}
@@ -410,6 +418,21 @@ export default function PublishQueuePanel() {
 
           <div className="border-t border-theme-divider px-5 py-3">
             <p className="text-xs text-theme-text-secondary">{data.note}</p>
+          </div>
+
+          {/* Repurpose an existing Buffer post back through the pipeline */}
+          <div className="border-t border-theme-divider">
+            <CardHeader
+              title="Repurpose a Buffer post"
+              description="Start a fresh VervAI run from a post you already posted — its text becomes the new source."
+            />
+            <BufferPostPicker
+              onRepurposed={(info) => {
+                setSuccess("Repurpose started — the new run is loading in the agent workspace.");
+                void fetchQueue();
+                router.push(`/agent?run=${info.runId}`);
+              }}
+            />
           </div>
         </>
       )}

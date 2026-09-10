@@ -14,7 +14,7 @@ interface ModeScaleSummary {
   canStrategize: boolean;
   canAutoRevise: boolean;
   requiresHumanApproval: boolean;
-  channelsConnected: boolean;
+  canSchedule: boolean;
 }
 
 interface ScaleData {
@@ -26,6 +26,7 @@ interface ScaleData {
   autopilotDoorExists: boolean;
   scheduleIsDraftOnly: boolean;
   note: string;
+  channelsConnected?: boolean;
 }
 
 export default function ScalePanel() {
@@ -89,6 +90,9 @@ export default function ScalePanel() {
                   <span className={`badge ${m.canAutoRevise ? "bg-primary-100 text-primary-500" : "bg-neutral-200 text-neutral-500"}`}>
                     revise
                   </span>
+                  <span className={`badge ${m.canSchedule ? "bg-primary-100 text-primary-500" : "bg-neutral-200 text-neutral-500"}`}>
+                    schedule
+                  </span>
                   {m.requiresHumanApproval && (
                     <span className="badge bg-amber-100 text-amber-600">human approval</span>
                   )}
@@ -98,15 +102,26 @@ export default function ScalePanel() {
           </ul>
 
           {data.autopilotDoorExists ? (
-            <p className="px-5 pb-2 text-xs text-amber-600">Autopilot is reachable — review before this ships.</p>
+            <p className="px-5 pb-2 text-xs text-amber-600">
+              Autopilot is reachable: automate mode can schedule drafts into your Buffer queue (you still review in Buffer
+              before they post).
+            </p>
           ) : (
             <p className="px-5 pb-2 text-xs text-theme-text-secondary">
-              No autopilot door exists: no worker auto-advances a queued job, and schedules are draft-only.
+              No autopilot door exists: without a Buffer API key, schedules are draft-only and no worker auto-advances a post.
             </p>
           )}
 
           {!data.scheduleIsDraftOnly && (
-            <p className="px-5 pb-2 text-xs text-amber-600">Schedules auto-send — this must be reviewed.</p>
+            <p className="px-5 pb-2 text-xs text-amber-600">
+              Scheduling is real with the Buffer API key — drafts land in your Buffer queue for review, never auto-published.
+            </p>
+          )}
+
+          {data.channelsConnected === false && (
+            <p className="px-5 pb-2 text-xs text-theme-text-secondary">
+              Manual "Send now" from the publish queue needs a connected Buffer account (OAuth).
+            </p>
           )}
 
           <div className="border-t border-theme-divider px-5 py-3">

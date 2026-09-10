@@ -1,35 +1,44 @@
-// P13: Tests for the scale / permission surface — read-mostly, no autopilot door.
+// P13: Tests for the scale / permission surface — read-mostly, honest doors.
 
 import { describe, expect, it } from "vitest";
 import { buildScaleSurface, modeScaleSummary } from "@/lib/agent/scale";
 
 describe("modeScaleSummary", () => {
-  it("labels every mode as requiring human approval (no mode auto-sends)", () => {
-    for (const mode of ["assist", "execute", "automate"] as const) {
-      expect(modeScaleSummary(mode).requiresHumanApproval).toBe(true);
-    }
+  it("keeps the human approval gate for assist + execute, auto-approves in automate", () => {
+    expect(modeScaleSummary("assist").requiresHumanApproval).toBe(true);
+    expect(modeScaleSummary("execute").requiresHumanApproval).toBe(true);
+    expect(modeScaleSummary("automate").requiresHumanApproval).toBe(false);
   });
 
-  it("surfaces the capability truth without a connected channel", () => {
+  it("exposes schedule only for automate with the Buffer API key configured", () => {
+    expect(modeScaleSummary("assist", true).canSchedule).toBe(false);
+    expect(modeScaleSummary("execute", true).canSchedule).toBe(false);
+    expect(modeScaleSummary("automate", false).canSchedule).toBe(false);
+    expect(modeScaleSummary("automate", true).canSchedule).toBe(true);
+  });
+
+  it("surfaces the capability truth", () => {
     expect(modeScaleSummary("assist").canDistribute).toBe(false);
     expect(modeScaleSummary("execute").canDistribute).toBe(false);
-    expect(modeScaleSummary("automate").canDistribute).toBe(true); // capability exposed, but...
-    expect(modeScaleSummary("automate").channelsConnected).toBe(false); // ...no channel to send to
+    expect(modeScaleSummary("automate").canDistribute).toBe(true);
   });
 });
 
 describe("buildScaleSurface", () => {
-  it("confirms structurally that no autopilot door exists", () => {
-    const s = buildScaleSurface();
+  it("reports no autopilot door and draft-only schedules without the API key", () => {
+    const s = buildScaleSurface(false);
     expect(s.autopilotDoorExists).toBe(false);
     expect(s.scheduleIsDraftOnly).toBe(true);
     expect(s.defaultMode).toBe("assist");
     expect(s.modes).toHaveLength(3);
+    expect(s.note).toContain("API key");
   });
 
-  it("contains an honest note (no claim of real publishing)", () => {
-    const s = buildScaleSurface();
-    expect(s.note).toContain("draft-only");
-    expect(s.note).not.toContain("success");
+  it("reports the door + non-draft schedules when the API key is configured", () => {
+    const s = buildScaleSurface(true);
+    expect(s.autopilotDoorExists).toBe(true);
+    expect(s.scheduleIsDraftOnly).toBe(false);
+    expect(s.modes.find((m) => m.mode === "automate")?.canSchedule).toBe(true);
+    expect(s.note).not.toContain("draft-only");
   });
 });

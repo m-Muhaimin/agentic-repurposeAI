@@ -29,7 +29,7 @@ describe("publishingChannelsConnected", () => {
     const service = {
       from: () => ({
         select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: { id: "conn-1" }, error: null }) })
+          eq: () => ({ neq: () => ({ maybeSingle: async () => ({ data: { id: "conn-1" }, error: null }) }) })
         })
       })
     } as never;
@@ -40,7 +40,7 @@ describe("publishingChannelsConnected", () => {
     const service = {
       from: () => ({
         select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) })
+          eq: () => ({ neq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) })
         })
       })
     } as never;
@@ -51,7 +51,7 @@ describe("publishingChannelsConnected", () => {
     const service = {
       from: () => ({
         select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: null, error: new Error("boom") }) })
+          eq: () => ({ neq: () => ({ maybeSingle: async () => ({ data: null, error: new Error("boom") }) }) })
         })
       })
     } as never;

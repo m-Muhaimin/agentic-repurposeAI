@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getRecentSignals } from "@/lib/agent/memory";
 import { aggregateMonthlySpend, type MonthlyAgentSpend } from "@/lib/agent/spend";
+import { getApiKey } from "@/lib/buffer/connections";
+import { publishStatusLabel } from "@/lib/agent/publish";
 import { log } from "@/lib/logger";
 
 // GET /api/agent/runs/[id] — full detail for the agent workspace: the run row,
 // its content ideas (the plan's approval surface), its durable step timeline,
-// the generated draft outputs, and the user's recent memory signals (for P7
-// decision-trail surface).
+// the generated draft outputs, the run's distribution jobs (Performance panel
+// feed, including MCP-pulled metrics), the MCP API-key availability, and the
+// user's recent memory signals (for P7 decision-trail surface).
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .maybeSingle();
   if (error || !run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
 
-  const [ideasResult, stepsResult, outputsResult, signals] = await Promise.all([
+  const [ideasResult, stepsResult, outputsResult, distributionResult, signals, hasApiKey] = await Promise.all([
     service
       .from("v4_content_ideas")
       .select("*")
@@ -38,12 +41,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     run.output_ids.length > 0
       ? service.from("outputs").select("*").in("id", run.output_ids).eq("user_id", user.id)
       : Promise.resolve({ data: [], error: null }),
-    getRecentSignals(user.id)
+    service.from("v4_distribution_jobs").select("*").eq("run_id", id).eq("user_id", user.id).order("updated_at", { ascending: false }),
+    getRecentSignals(user.id),
+    getApiKey(user.id)
   ]);
 
   const ideas = ideasResult.data ?? [];
   const steps = stepsResult.data ?? [];
   const outputs = outputsResult.data ?? [];
+  const distributionJobs = ((distributionResult.data ?? []) as Array<{ status: string | null }>).map((j) => ({
+    ...j,
+    statusLabel: publishStatusLabel(j.status as Parameters<typeof publishStatusLabel>[0])
+  }));
 
   // Monthly agent spend for the consumer budget line (service-role query, same
   // aggregation semantics as the strategy surface — honest totals, never new data).
@@ -63,5 +72,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   log.info("agent.run_detail", { run_id: id, user_id: user.id });
 
-  return NextResponse.json({ run, ideas, steps, outputs, signals, monthlySpend });
+  return NextResponse.json({ run, ideas, steps, outputs, distributionJobs, signals, monthlySpend, hasApiKey });
 }

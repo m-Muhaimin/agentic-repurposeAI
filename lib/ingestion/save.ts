@@ -15,7 +15,7 @@ type TranscriptProvider = (typeof TRANSCRIPT_PROVIDERS)[number];
 // that case so callers can log it.
 export async function saveTranscript(
   supabase: SupabaseClient,
-  source: IngestSource,
+  source: Pick<IngestSource, "id" | "user_id">,
   doc: TranscriptDocument
 ): Promise<boolean> {
   const provider = TRANSCRIPT_PROVIDERS.find((p) => p === doc.provider) ?? "transcript_file";

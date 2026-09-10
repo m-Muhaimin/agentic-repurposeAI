@@ -44,15 +44,18 @@ export type PublishAction =
 export type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
 // Whether the user has a real publishing provider connected (Buffer, Stage 4).
-// This is the single honest gate: no buffer_connections row for the user means
-// no channel, and SENDING MUST refuse when false. Async, DB-backed — callers
-// pass the same service client they already hold for the request.
+// This is the single honest gate: no OAuth buffer_connections row for the user
+// means no channel, and SENDING MUST refuse when false. An api-key-only row
+// (the MCP connector credential) is deliberately NOT counted — the manual
+// GraphQL send path needs OAuth. Async, DB-backed — callers pass the same
+// service client they already hold for the request.
 export async function publishingChannelsConnected(userId: string, service: ServiceClient): Promise<boolean> {
   if (!userId || typeof service?.from !== "function") return false;
   const { data, error } = await service
     .from("buffer_connections")
     .select("id")
     .eq("user_id", userId)
+    .neq("access_token", "")
     .maybeSingle();
   if (error || !data) return false;
   return true;

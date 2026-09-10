@@ -22,6 +22,11 @@
 // The run parks at awaiting_approval while the human decides. Approval flips
 // status to executing (POST /api/agent/runs/[id]/approve); a later process call
 // picks it up exactly like a fresh claim.
+//
+// `automate` mode auto-approves: runPlanning flips to executing (approval_decision
+// "auto_approved") and the same process call continues straight into execution —
+// one claim, one continuous run to done. The worker state machine is unchanged;
+// only the gate (human vs auto approval) is skipped.
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { log } from "@/lib/logger";
@@ -34,6 +39,7 @@ import { generationTool } from "@/lib/agent/tools/generation";
 import { intelligenceTool } from "@/lib/agent/tools/intelligence";
 import { sourceTool } from "@/lib/agent/tools/source";
 import { reviewTool } from "@/lib/agent/tools/review";
+import { scheduleRunOutputs } from "@/lib/agent/schedule";
 
 export type Send = (event: string, data: unknown) => void;
 
@@ -85,6 +91,9 @@ interface RunOutcome {
   outputIds: string[];
   completed: number; // drafts written
   attempted: number; // drafts attempted
+  // Planning only: where the run should sit after the phase. Missing for
+  // execution. Used to continue a same-invocation run in automate mode.
+  parkedStatus?: "awaiting_approval" | "executing";
 }
 
 // Claim a run for planning (created/planning, or stale) or execution
@@ -295,11 +304,16 @@ async function runPlanning(
   );
 
   // Persist the plan + each angle as a v4_content_ideas row for the approval UI.
-  await service
+  // In `automate` mode the angles are auto-approved on the user's behalf (the
+  // capability) but that state is visible: status goes straight to `executing`
+  // and approval_decision records it — the same place a manual approval lands.
+  const autoApproved = mode === "automate";
+  const { error: runError } = await service
     .from("v4_agent_runs")
     .update({
       plan: plan as never,
-      status: "awaiting_approval",
+      status: autoApproved ? "executing" : "awaiting_approval",
+      approval_decision: autoApproved ? "auto_approved" : null,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       cost_units: totalCost,
@@ -307,6 +321,7 @@ async function runPlanning(
       updated_at: new Date().toISOString()
     })
     .eq("id", runId);
+  if (runError) throw new Error(`Could not persist plan: ${runError.message}`);
 
   // Score every angle with the deterministic P3 rubric (objective, grounded,
   // ranked) and persist the evaluation onto each idea row at ingest time — so
@@ -334,17 +349,30 @@ async function runPlanning(
     }))
   );
 
-  send("progress", { stage: "Awaiting approval", pct: 55 });
+  send("progress", {
+    stage: autoApproved ? "Angles auto-approved (automate)" : "Awaiting approval",
+    pct: autoApproved ? 60 : 55
+  });
 
   log.info("agent.planning_done", {
     run_id: runId,
     user_id: userId,
     angles: plan.angles.length,
+    auto_approved: autoApproved,
     input_tokens: inputTokens,
     output_tokens: outputTokens
   });
 
-  return { reason: null, costUnits: totalCost, inputTokens, outputTokens, outputIds: [], completed: 0, attempted: 0 };
+  return {
+    reason: null,
+    costUnits: totalCost,
+    inputTokens,
+    outputTokens,
+    outputIds: [],
+    completed: 0,
+    attempted: 0,
+    parkedStatus: autoApproved ? "executing" : "awaiting_approval"
+  };
 }
 
 // ── Execution phase: approved ideas → drafts → evaluation → done ────────────
@@ -607,6 +635,15 @@ async function finalizeRun(
 
   let patch: Record<string, unknown>;
   if (outcome.reason === null) {
+    if (phase === "planning") {
+      // Planning never writes outputs, so a "normal" planning finish is a
+      // PARK, not a completion: the run stays awaiting_approval (or executing,
+      // in automate mode) — the transition out of it happens on human approval
+      // or the same-call execution continuation. Stamping `done`/`finished_at`
+      // here is the classic skip-the-quality-review bug: angles could be
+      // approved from a row that already claims the run finished.
+      return;
+    }
     patch = { ...common, ...tokenPatch, status: "done", error_message: null } as never;
   } else if (outcome.reason === "cancelled") {
     const phaseText = phase === "planning" ? "planning angles" : "generating drafts";
@@ -646,6 +683,8 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
   const { run, phase } = claimed;
   log.info("agent.claimed", { run_id: runId, user_id: run.user_id, phase, attempt: run.attempt });
 
+  let effectivePhase = phase;
+
   try {
     // Set a transient in-flight status so the UI shows life.
     if (phase === "execution" && run.status !== "executing") {
@@ -655,9 +694,50 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
         .eq("id", runId);
     }
 
-    const outcome = phase === "planning" ? await runPlanning(service, run, send) : await runExecution(service, run, send);
+    let outcome =
+      phase === "planning" ? await runPlanning(service, run, send) : await runExecution(service, run, send);
 
-    await finalizeRun(service, runId, outcome, phase);
+    // `automate` auto-approval: runPlanning parked straight into `executing`, so
+    // continue through execution in the same worker invocation — one claim, one
+    // POST, straight to done. Re-read the live row (planning persisted tokens,
+    // cost and status); a second claimRun would lose, but we already hold the
+    // fresh heartbeat from planning.
+    if (phase === "planning" && outcome.reason === null && outcome.parkedStatus === "executing") {
+      const { data: live } = await service.from("v4_agent_runs").select("*").eq("id", runId).maybeSingle();
+      if (live) {
+        effectivePhase = "execution";
+        send("progress", { stage: "Angles approved — generating drafts", pct: 60 });
+        outcome = await runExecution(service, live as AgentRunRow, send);
+      }
+    }
+
+    // Automate-only: schedule approved drafts into the user's Buffer queue. This
+    // is a best-effort bonus on top of the drafts — a scheduling failure must
+    // never fail the run, so it's wrapped and logged here.
+    if (outcome.reason === null && effectivePhase === "execution" && (run.mode ?? "assist") === "automate") {
+      if (outcome.outputIds.length > 0) {
+        try {
+          send("progress", { stage: "Scheduling approved drafts", pct: 95 });
+          const sched = await scheduleRunOutputs(
+            service,
+            { userId: run.user_id, runId, mode: "automate" },
+            outcome.outputIds
+          );
+          log.info("agent.schedule_summary", {
+            run_id: runId,
+            user_id: run.user_id,
+            ...sched
+          });
+        } catch (err) {
+          log.error("agent.schedule_error", err instanceof Error ? err : new Error(String(err)), {
+            run_id: runId,
+            user_id: run.user_id
+          });
+        }
+      }
+    }
+
+    await finalizeRun(service, runId, outcome, effectivePhase);
 
     if (outcome.reason === null) {
       send("progress", { stage: "Ready", pct: 100 });
@@ -691,7 +771,7 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
     const transient = isTransientError(err);
     const canRetry = transient && (run.attempt ?? 0) < MAX_PHASE_ATTEMPTS;
 
-    const failedKind = phase === "planning" ? "planning" : "generation";
+    const failedKind = effectivePhase === "planning" ? "planning" : "generation";
     await recordStep(
       service,
       runId,
@@ -716,7 +796,7 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
         run_id: runId,
         user_id: run.user_id,
         attempt: run.attempt,
-        phase,
+        phase: effectivePhase,
         error: message
       });
       return;
@@ -738,7 +818,7 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
       run_id: runId,
       user_id: run.user_id,
       attempt: run.attempt,
-      phase,
+      phase: effectivePhase,
       retryable: false
     });
     throw err;

@@ -21,6 +21,8 @@ export interface TimelineOpts {
   status: RunStatus;
   totalIdeas: number;
   approvedIdeas: number;
+  // Run mode — used to phrase the review/approval lines honestly for automate.
+  mode?: "assist" | "execute" | "automate";
 }
 
 function anyDone(steps: TimelineStepInput[], kind: string) {
@@ -68,10 +70,14 @@ export function humanizeTimeline(steps: TimelineStepInput[], opts: TimelineOpts)
       state: "pending"
     });
   } else if (opts.status !== "created" && opts.status !== "planning") {
+    const automated = opts.mode === "automate";
     lines.push({
       id: "review",
-      text:
-        opts.approvedIdeas > 0
+      text: automated
+        ? opts.approvedIdeas > 0
+          ? `Approved ${opts.approvedIdeas} of ${Math.max(opts.totalIdeas, opts.approvedIdeas)} angle${opts.approvedIdeas === 1 ? "" : "s"} automatically (automate)`
+          : "Angles auto-approved (automate)"
+        : opts.approvedIdeas > 0
           ? `You kept ${opts.approvedIdeas} of ${Math.max(opts.totalIdeas, opts.approvedIdeas)} angle${opts.approvedIdeas === 1 ? "" : "s"}`
           : "You approved the angles to work on",
       state: "done"
@@ -110,9 +116,14 @@ export function humanizeTimeline(steps: TimelineStepInput[], opts: TimelineOpts)
   const distributed = anyDone(steps, "distribution");
   const distributing = anyActive(steps, "distribution");
   if (distributed || distributing) {
+    const automated = opts.mode === "automate";
     lines.push({
       id: "publish",
-      text: distributed ? "Sent to your publishing queue" : "Preparing your publishing queue",
+      text: distributed
+        ? automated
+          ? "Scheduled your drafts into the Buffer queue"
+          : "Sent to your publishing queue"
+        : "Preparing your publishing queue",
       state: distributed ? "done" : "active"
     });
   }

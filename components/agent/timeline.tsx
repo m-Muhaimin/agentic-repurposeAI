@@ -73,12 +73,14 @@ export default function Timeline({
   steps,
   status,
   totalIdeas,
-  approvedIdeas
+  approvedIdeas,
+  mode
 }: {
   steps: StepRow[];
   status: RunStatus;
   totalIdeas: number;
   approvedIdeas: number;
+  mode?: "assist" | "execute" | "automate";
 }) {
   if (steps.length === 0 && status === "created") {
     return (
@@ -91,7 +93,7 @@ export default function Timeline({
 
   const lines = humanizeTimeline(
     steps.map((s) => ({ kind: s.kind, status: s.status })),
-    { status, totalIdeas, approvedIdeas }
+    { status, totalIdeas, approvedIdeas, mode }
   );
 
   return (

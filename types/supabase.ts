@@ -60,7 +60,7 @@ export type Database = {
         Relationships: [];
       };
       buffer_connections: {
-        Row: { id: string; user_id: string; buffer_account_id: string; buffer_username: string; access_token: string; refresh_token: string | null; access_token_expires_at: string | null; created_at: string; updated_at: string };
+        Row: { id: string; user_id: string; buffer_account_id: string; buffer_username: string; access_token: string; refresh_token: string | null; access_token_expires_at: string | null; api_key: string | null; created_at: string; updated_at: string };
         Insert: Partial<Database["public"]["Tables"]["buffer_connections"]["Row"]> & { user_id: string; buffer_account_id: string; buffer_username: string; access_token: string };
         Update: Partial<Database["public"]["Tables"]["buffer_connections"]["Row"]>;
         Relationships: [];
@@ -126,7 +126,7 @@ export type Database = {
         Relationships: [];
       };
       v4_distribution_jobs: {
-        Row: { id: string; user_id: string; run_id: string | null; output_id: string | null; platform: "linkedin"|"x"|"newsletter"|"youtube_shorts"|"tiktok"|"instagram"; status: "draft"|"scheduled"|"published"|"failed"|"cancelled"; scheduled_at: string | null; published_at: string | null; external_id: string | null; error_message: string | null; created_at: string; updated_at: string };
+        Row: { id: string; user_id: string; run_id: string | null; output_id: string | null; platform: "linkedin"|"x"|"newsletter"|"youtube_shorts"|"tiktok"|"instagram"; status: "draft"|"scheduled"|"published"|"failed"|"cancelled"; scheduled_at: string | null; published_at: string | null; external_id: string | null; error_message: string | null; metrics: unknown; metrics_refreshed_at: string | null; created_at: string; updated_at: string };
         Insert: Partial<Database["public"]["Tables"]["v4_distribution_jobs"]["Row"]> & { user_id: string; platform: "linkedin"|"x"|"newsletter"|"youtube_shorts"|"tiktok"|"instagram" };
         Update: Partial<Database["public"]["Tables"]["v4_distribution_jobs"]["Row"]>;
         Relationships: [];

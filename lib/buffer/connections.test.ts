@@ -8,6 +8,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 let behavior: Record<string, unknown> = {};
 const upserts: { payload: unknown }[] = [];
+const updates: { payload: unknown }[] = [];
 let fetches: string[] = [];
 
 function chain() {
@@ -26,6 +27,10 @@ function chain() {
     upsert(payload: unknown) {
       upserts.push({ payload });
       return { error: behavior["upsert_error"] ?? null };
+    },
+    update(payload: unknown) {
+      updates.push({ payload });
+      return { error: behavior["update_error"] ?? null };
     }
   };
   return {
@@ -46,7 +51,15 @@ vi.mock("./crypto", () => ({
   decryptSecret: (s: string) => (typeof s === "string" && s.startsWith("ENC:") ? s.slice(4) : s)
 }));
 
-import { getFreshAccessToken } from "./connections";
+import {
+  getFreshAccessToken,
+  getApiKey,
+  saveApiKey,
+  deleteApiKey,
+  getConnection,
+  connectionHasOAuth,
+  saveConnection
+} from "./connections";
 
 const TOKEN_URL = "https://auth.buffer.com/token";
 
@@ -198,5 +211,84 @@ describe("getFreshAccessToken — token freshness", () => {
     stubTokenResponse({ error: "invalid_grant" });
     await expect(getFreshAccessToken("u1")).rejects.toThrow(/refresh failed/i);
     expect(upserts).toEqual([]);
+  });
+});
+
+describe("Buffer API key (MCP connector credential)", () => {
+  it("returns null for a user with no API key", async () => {
+    behavior["buffer_connections"] = { data: null };
+    expect(await getApiKey("u1")).toBeNull();
+  });
+
+  it("returns the decrypted key when one is stored", async () => {
+    behavior["buffer_connections"] = { data: { api_key: "ENC:kp-1" } };
+    expect(await getApiKey("u1")).toBe("kp-1");
+  });
+
+  it("saves the key encrypted and does not need OAuth columns to be real", async () => {
+    behavior["buffer_connections"] = { data: null };
+    await saveApiKey("u1", "  kp-new  ");
+    const saved = upserts[0].payload as Record<string, unknown>;
+    expect(saved.user_id).toBe("u1");
+    expect(saved.api_key).toBe("ENC:kp-new");
+    expect(saved.access_token).toBe("");
+    expect(saved.buffer_account_id).toBe("api-key");
+    expect(saved.buffer_username).toBe("Buffer API key");
+  });
+
+  it("keeps an existing OAuth connection when only the API key is added", async () => {
+    behavior["buffer_connections"] = {
+      data: connectionRow({ access_token: "ENC:tok-1", refresh_token: "ENC:refr-1" }).data
+    };
+    await saveApiKey("u1", "kp-2");
+    const saved = upserts[0].payload as Record<string, unknown>;
+    expect(saved.api_key).toBe("ENC:kp-2");
+    expect(saved.access_token).toBe("ENC:tok-1");
+    expect(saved.refresh_token).toBe("ENC:refr-1");
+    expect(saved.buffer_account_id).toBe("1");
+  });
+
+  it("removes the key with an update (OAuth connection untouched)", async () => {
+    await deleteApiKey("u1");
+    expect(updates[0].payload).toEqual({ api_key: null });
+  });
+
+  it("saveConnection preserves an existing API key (OAuth connect must not wipe MCP credentials)", async () => {
+    behavior["buffer_connections"] = {
+      data: { api_key: "ENC:kp-keep", access_token: "", refresh_token: null, access_token_expires_at: null }
+    };
+    await saveConnection(
+      "u1",
+      { access_token: "tok-9", refresh_token: "refr-9", expires_in: 86_400 },
+      { id: "9", username: "acc" }
+    );
+    const saved = upserts[0].payload as Record<string, unknown>;
+    expect(saved.access_token).toBe("ENC:tok-9");
+    expect(saved.api_key).toBe("ENC:kp-keep");
+  });
+});
+
+describe("connectionHasOAuth + api-key-only rows", () => {
+  it("treats an empty access_token (api-key-only row) as NOT an OAuth connection", async () => {
+    expect(connectionHasOAuth({ accessToken: "" })).toBe(false);
+    expect(connectionHasOAuth({ accessToken: "tok" })).toBe(true);
+  });
+
+  it("getConnection never tries to decrypt a blank access_token", async () => {
+    behavior["buffer_connections"] = {
+      data: { ...connectionRow({}).data, access_token: "", api_key: "ENC:kp-1" }
+    };
+    const conn = await getConnection("u1");
+    expect(conn).not.toBeNull();
+    expect(conn!.accessToken).toBe("");
+    expect(conn!.apiKey).toBe("kp-1");
+  });
+
+  it("getFreshAccessToken returns null for an api-key-only row (manual send stays OAuth-gated)", async () => {
+    behavior["buffer_connections"] = {
+      data: { ...connectionRow({}).data, access_token: "", refresh_token: null }
+    };
+    expect(await getFreshAccessToken("u1")).toBeNull();
+    expect(fetches).toEqual([]);
   });
 });

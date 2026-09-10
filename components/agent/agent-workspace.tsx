@@ -137,7 +137,7 @@ export default function AgentWorkspace({
 
           {/* The selected run's panels: RunDetail places itself in the left
               (decision trail — row 2) and right (Progress + Budget rail) cells. */}
-          <RunDetail runId={runId} goal={goals[runId]} onChange={handleDetailChange} />
+          <RunDetail runId={runId} goal={goals[runId]} onChange={handleDetailChange} onSelectRun={setRunId} />
         </>
       ) : (
         <>

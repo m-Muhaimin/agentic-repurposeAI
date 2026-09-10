@@ -206,9 +206,10 @@ create policy "Users can delete their own agent preferences"
   using (auth.uid() = user_id);
 
 -- ── V4_distribution_jobs: Stage 4 seeding (schedule/publish) ██████████████
--- Data model exists; the worker's schedule/publish verbs deliberately throw
--- NotImplementedError (see lib/agent/tools/distribution.ts) until there is a
--- real publish action to gate.
+-- The manual send path is real (Buffer OAuth graphql) and the automate path is
+-- real (Buffer MCP connector, create_post into the queue). `metrics` holds the
+-- post analytics returned by the MCP connector's list_posts for the evaluate
+-- phase; metrics_refreshed_at is its last successful refresh.
 create table if not exists public.v4_distribution_jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -224,6 +225,8 @@ create table if not exists public.v4_distribution_jobs (
   published_at timestamptz,
   external_id text,
   error_message text,
+  metrics jsonb,
+  metrics_refreshed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

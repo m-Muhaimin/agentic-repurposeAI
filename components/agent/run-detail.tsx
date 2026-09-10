@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader } from "@/components/card";
 import type { AgentRunRow, ContentIdea, EditSignal, RunStatus } from "@/types/agent";
 import { stepSpendFromOutput, aggregateRunSpend, formatCostUsd, formatCostUnits, spendSourceLabel, type MonthlyAgentSpend, type StepSpend } from "@/lib/agent/spend";
@@ -9,6 +10,7 @@ import { AGENT_STATUS_LABEL, AGENT_STATUS_STYLE } from "@/lib/status";
 import PlanView from "./plan-view";
 import Timeline from "./timeline";
 import AgentProgressDots from "./progress-dots";
+import BufferPostPicker from "./buffer-post-picker";
 
 // Pulls the full durable snapshot for one run and drives the stage machine
 // from the UI: reads the plan → approve/reject → kick the execution worker →
@@ -49,8 +51,41 @@ interface RunDetailData {
     finished_at: string | null;
   }>;
   outputs: Array<{ id: string; format: string; content: string; created_at: string }>;
+  distributionJobs: Array<{
+    id: string;
+    platform: string;
+    status: string;
+    statusLabel: string;
+    scheduled_at: string | null;
+    published_at: string | null;
+    external_id: string | null;
+    error_message: string | null;
+    metrics: Record<string, unknown> | null;
+    metrics_refreshed_at: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  hasApiKey: boolean;
   signals: EditSignal[];
   monthlySpend: MonthlyAgentSpend | null;
+}
+
+// Render Buffer post metrics honestly: pick out stable top-level numbers and
+// flatten nested counters into a readable row. Never asserts engagement quality.
+function metricChips(metrics: Record<string, unknown> | null): Array<{ key: string; value: string }> {
+  if (!metrics) return [];
+  const out: Array<{ key: string; value: string }> = [];
+  for (const [key, value] of Object.entries(metrics)) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === "number") {
+      out.push({ key, value: value.toLocaleString() });
+    } else if (typeof value === "boolean") {
+      out.push({ key, value: value ? "yes" : "no" });
+    } else if (typeof value === "string") {
+      out.push({ key, value });
+    }
+  }
+  return out.slice(0, 6);
 }
 
 const IN_FLIGHT: RunStatus[] = ["created", "planning", "executing", "evaluating"];
@@ -71,15 +106,19 @@ const FORMAT_LABEL: Record<string, string> = {
 export default function RunDetail({
   runId,
   onChange,
-  goal
+  goal,
+  onSelectRun
 }: {
   runId: string;
   onChange: () => void;
   goal?: string;
+  onSelectRun?: (runId: string) => void;
 }) {
   const [data, setData] = useState<RunDetailData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshingMetrics, setRefreshingMetrics] = useState(false);
+  const router = useRouter();
 
   // Hold the latest props/state in refs so `refresh` keeps a stable identity
   // for a given runId. The parent passes an inline onChange, so depending on
@@ -205,6 +244,40 @@ export default function RunDetail({
     }
   }
 
+  async function refreshMetrics() {
+    setRefreshingMetrics(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agent/metrics/refresh", { method: "POST" });
+      const body = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !body.ok) {
+        setError(body.error ?? "VervAI couldn't refresh post metrics. Your content is safe. [Try again]");
+        return;
+      }
+      await refresh();
+    } finally {
+      setRefreshingMetrics(false);
+    }
+  }
+
+  async function handleRepurposed(info: { runId: string; sourceId: string }) {
+    // Start the new run's worker (same call the composer makes), then select it.
+    try {
+      await fetch("/api/agent/process", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId: info.runId })
+      });
+    } catch {
+      // The run is durable; selecting it still works even if the kick failed.
+    }
+    if (onSelectRun) {
+      onSelectRun(info.runId);
+    } else {
+      router.push(`/agent?run=${info.runId}`);
+    }
+  }
+
   if (!data) {
     return (
       <section className="animate-fade-in lg:col-start-1 lg:row-start-2">
@@ -213,7 +286,7 @@ export default function RunDetail({
     );
   }
 
-  const { run, ideas, steps, outputs, signals, monthlySpend } = data;
+  const { run, ideas, steps, outputs, distributionJobs, hasApiKey, signals, monthlySpend } = data;
   const waiting = run.status === "awaiting_approval";
 
   // P9: Extract per-step spend data from step outputs (spend events recorded
@@ -348,6 +421,72 @@ export default function RunDetail({
               </Card>
             )}
 
+            {/* ── Performance: real Buffer post metrics for what this run scheduled ── */}
+            {distributionJobs.length > 0 && (
+              <Card>
+                <CardHeader
+                  title="Performance"
+                  description="Live Buffer post metrics for the posts this run placed — pulled from Buffer, never estimated."
+                />
+                <ul className="divide-y divide-theme-divider">
+                  {distributionJobs.map((job) => (
+                    <li key={job.id} className="px-5 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="badge bg-primary-100 text-primary-500">{job.platform}</span>
+                        <span className="text-xs text-theme-text-secondary">
+                          {job.statusLabel}
+                          {job.scheduled_at ? ` · ${new Date(job.scheduled_at).toLocaleString(undefined, { month: "short", day: "numeric" })}` : ""}
+                          {job.external_id ? ` · Buffer #${job.external_id.slice(0, 8)}` : ""}
+                        </span>
+                      </div>
+                      {job.error_message && (
+                        <p className="mt-1.5 text-xs text-red-600">{job.error_message}</p>
+                      )}
+                      {job.metrics && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {metricChips(job.metrics).map((chip) => (
+                            <span key={chip.key} className="badge bg-neutral-100 text-neutral-600">
+                              {chip.key}: {chip.value}
+                            </span>
+                          ))}
+                          {job.metrics_refreshed_at && (
+                            <span className="text-xs text-theme-text-secondary">
+                              refreshed {new Date(job.metrics_refreshed_at).toLocaleString(undefined, { month: "short", day: "numeric" })}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-theme-divider px-5 py-3">
+                  <button
+                    type="button"
+                    onClick={() => void refreshMetrics()}
+                    disabled={refreshingMetrics || !hasApiKey}
+                    className="btn btn-outline-primary btn-sm disabled:opacity-50"
+                  >
+                    {refreshingMetrics
+                      ? "Refreshing…"
+                      : hasApiKey
+                        ? "Refresh metrics"
+                        : "Add a Buffer API key to refresh metrics"}
+                  </button>
+                </div>
+              </Card>
+            )}
+
+            {/* ── Repurpose an existing Buffer post back through the pipeline ── */}
+            {run.status === "done" && (
+              <Card>
+                <CardHeader
+                  title="Repurpose a Buffer post"
+                  description="Pick a post you already posted — VervAI turns its text into a fresh source and plans new angles from it."
+                />
+                <BufferPostPicker mode={run.mode} onRepurposed={handleRepurposed} onError={setError} />
+              </Card>
+            )}
+
             {/* ── P7: Edit-learning readout (what VervAI remembers) ──── */}
             {signals.length > 0 && (
               <Card>
@@ -398,6 +537,7 @@ export default function RunDetail({
           status={run.status}
           totalIdeas={ideas.length}
           approvedIdeas={approvedIdeas}
+          mode={run.mode}
         />
 
         {/* ── P8+P9: Run budget (collapsed; full metrics behind "View details") ── */}
