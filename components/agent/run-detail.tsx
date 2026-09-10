@@ -40,6 +40,7 @@ interface RunDetailData {
     kind: string;
     status: string;
     label: string | null;
+    input?: unknown;
     output: {
       outputId?: string;
       evaluation?: { score?: number; weak?: boolean; flags?: string[]; notes?: string[] };
@@ -97,6 +98,27 @@ const POLL_ADVANCING_MS = 2000;
 const POLL_PARKED_MS = 5000;
 const POLL_IDLE_MS = 8000;
 
+// Auto-resume: the worker claims runs atomically, so a re-POST is always safe.
+// If a run looks stalled past its re-claim window, we kick the worker again so
+// the chain keeps moving with no manual "Resume". The windows mirror the
+// orchestrator's claim rules (lib/agent/orchestrator.ts) plus a conservative
+// margin: created is always claimable, planning re-claims after a 10-min
+// stale updated_at, executing/evaluating after a 90 s stale heartbeat. The
+// margin stops us ever double-claiming a just-slow-but-alive worker.
+const CREATED_STALL_MS = 45_000;
+const PLANNING_STALL_MS = 10 * 60_000 + 30_000;
+const EXECUTION_STALL_MS = 3 * 60_000;
+// Don't re-fire a failed or no-op kick on every 2 s poll tick.
+const AUTO_RESUME_COOLDOWN_MS = 120_000;
+
+function runIsStalled(run: AgentRunRow): boolean {
+  const now = Date.now();
+  if (run.status === "created") return now - Date.parse(run.updated_at) > CREATED_STALL_MS;
+  const lastActive = run.heartbeat_at ? Date.parse(run.heartbeat_at) : Date.parse(run.updated_at);
+  const windowMs = run.status === "planning" ? PLANNING_STALL_MS : EXECUTION_STALL_MS;
+  return now - lastActive > windowMs;
+}
+
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter",
@@ -130,6 +152,7 @@ export default function RunDetail({
   dataRef.current = data;
   const fetchingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const lastResumeRef = useRef(0);
 
   const refresh = useCallback(async () => {
     // Skip a poll that's still in flight — overlapping fetches can resolve out
@@ -183,7 +206,20 @@ export default function RunDetail({
     };
   }, [runId, refresh]);
 
+  // Chained execution: the worker claims runs atomically, so re-POSTing is
+  // always safe. When a run sits past its re-claim window (a dead worker, a
+  // lost serverless invocation) we resume it automatically instead of asking
+  // the human to click "Resume run". awaiting_approval is a human gate and is
+  // never auto-kicked.
+  useEffect(() => {
+    const run = data?.run;
+    if (!run || !IN_FLIGHT.includes(run.status) || !runIsStalled(run)) return;
+    if (Date.now() - lastResumeRef.current < AUTO_RESUME_COOLDOWN_MS) return;
+    void kick();
+  });
+
   async function kick() {
+    lastResumeRef.current = Date.now();
     setBusy(true);
     setError(null);
     try {
@@ -518,9 +554,9 @@ export default function RunDetail({
               </Card>
             )}
 
-            {IN_FLIGHT.includes(run.status) && (
+            {IN_FLIGHT.includes(run.status) && runIsStalled(run) && (
               <button type="button" onClick={kick} disabled={busy} className="btn btn-primary disabled:opacity-50">
-                {run.status === "planning" ? "Kick planning worker" : "Resume run"}
+                Resume run
               </button>
             )}
           </>
