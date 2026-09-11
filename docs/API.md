@@ -26,7 +26,9 @@ plus the client-side intake flow that calls Supabase directly.
 - [Analytics events](#analytics-events)
 - [Agentic API](#agentic-api)
 - [YouTube integration](#youtube-integration)
+- [Google Drive integration](#google-drive-integration)
 - [Buffer integration](#buffer-integration)
+- [Health & diagnostics](#health--diagnostics)
 - [Rate limits & safety rails](#rate-limits--safety-rails)
 - [Data model](#data-model)
 
@@ -742,6 +744,53 @@ Request body:
   stays `scheduled` with `external_id` + `scheduled_at` — never a fabricated
   `published` state.
 
+### `GET /api/agent/posts?status=<comma-separated>` — Buffer posts for repurposing
+
+**Auth:** required. Lists the caller's Buffer posts via the MCP connector
+(`list_posts`, 100/organization) for the "repurpose an existing post" picker.
+
+- No Buffer API key → `503 {"ok":false,"error":"…","code":"NO_BUFFER_API_KEY"}`.
+- MCP failure → `502 {"ok":false,"error":"…","code":"rate_limited|buffer_error"}`.
+
+Response: `{ "ok": true, "posts": [ { "id", "status", "text", "preview",
+"channelName", "channelService", "dueAt", "sentAt", "createdAt" } ] }`.
+
+### `POST /api/agent/repurpose` — repurpose a Buffer post as a new run
+
+**Auth:** required. Body: `{ "postId": string, "mode?": "assist|execute|automate" }`
+(default `assist`).
+
+- `postId` missing → `400`.
+- No Buffer API key → `503 {"error":"…","code":"NO_BUFFER_API_KEY"}`.
+- Post fetch fails → `502`; the post has no text → `422 {"error":"That Buffer
+  post has no text to repurpose."}`.
+- Creates a transcript-style `sources` row (marker `storage_path`) → canonical
+  `transcripts` row → seeds memory + budget snapshot → inserts a `v4_agent_runs`
+  row. Missing agent schema → `503` with a schema hint.
+- Success `201`: `{ "ok": true, "sourceId": "uuid", "run": { "id", "status":
+  "created", "mode", "created_at", "max_steps", "max_cost_units",
+  "max_runtime_s" } }`.
+
+### `POST /api/agent/metrics/refresh` — refresh post metrics
+
+**Auth:** required. Pulls fresh Buffer `list_posts` metrics onto the user's
+`v4_distribution_jobs` (`metrics` + `metrics_refreshed_at`), capped at 4×100.
+
+- No Buffer API key → `503 {"ok":false,"error":"…","code":"NO_BUFFER_API_KEY"}`.
+- Failure → `502 {"ok":false,"error":"Metrics refresh failed."}`.
+- Success: `{ "ok": true, …refreshRunMetrics result… }` (jobs iterated, per-job
+  status, errors list).
+
+### `GET /api/agent/runs/[id]/graph` — run workflow graph
+
+**Auth:** required. Rebuilds the authoritative workflow graph for one run from
+durable state (source, ideas, steps, outputs, distribution jobs, intelligence
+counts) — never persisted, rebuilt on every read. `404` if the run isn't owned.
+
+Response: `{ "graph": { "nodes": [ … ], "edges": [ … ] } }` (maps 1:1 to the
+React Flow canvas; intelligence returns counts only — never transcript/evidence
+text).
+
 ---
 
 ## YouTube integration
@@ -802,11 +851,64 @@ Response: `{ "videos": [ { "id", "title", "…" } ] }`.
 
 ---
 
+## Google Drive integration
+
+Google OAuth (Drive API v3) to read a connected user's Drive files for intake.
+Reuses the **same Google Cloud OAuth client** as YouTube
+(`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) with the `drive.readonly` scope.
+Tokens are AES-256-GCM encrypted at rest with the same
+`YOUTUBE_TOKEN_ENCRYPTION_KEY`.
+
+- **Redirect URI:** `{origin}/api/integrations/drive/callback` — this is a
+  **separate entry** from the YouTube callback in the Google Cloud console.
+- `access_type=offline` + `prompt=consent` (guaranteed refresh token).
+
+### `GET /api/integrations/drive/connect`
+
+**Auth:** required. Redirects to Google consent; sets a `gd_oauth_state` httpOnly
+`sameSite=Lax` cookie (600s) for CSRF state binding. `GOOGLE_CLIENT_ID` missing →
+`503 {"error":"Google OAuth is not configured."}`.
+
+### `GET /api/integrations/drive/callback`
+
+Public OAuth callback. Query: `code`, `state`, optional `error`.
+
+- Consent denied → `/connections?success=drive&error=denied`.
+- Not signed in → `/login?next=/connections&message=Connect-Drive-after-login`.
+- State mismatch / missing code → `/connections?success=drive&error=state`
+  (constant-time compare).
+- Exchanges the code, fetches the account (email/name), persists encrypted
+  tokens (one row per user) → `/connections?success=drive`. Config missing →
+  `?error=config`; other failures → `?error=failed`.
+- Deletes the `gd_oauth_state` cookie.
+
+### `GET /api/integrations/drive/status`
+
+**Auth:** required.
+
+```json
+{ "connected": true, "email": "…", "name": "…" }
+```
+
+Account name/email only — tokens never returned.
+
+### `DELETE /api/integrations/drive/disconnect`
+
+**Auth:** required. Deletes the connection row (and encrypted tokens).
+`{ "ok": true }`.
+
+---
+
 ## Buffer integration
 
-"Bring Your Own Buffer" publishing — connect a Buffer account, then manually
-send / schedule drafts from the publish queue. Uses PKCE (S256) OAuth; tokens
-AES-256-GCM encrypted at rest.
+"Bring Your Own Buffer" publishing — two deliberately separate auth paths:
+
+- **OAuth (PKCE S256)** → manual "Send now"/"Schedule" from the publish queue
+  (GraphQL), gated by a human click.
+- **API key (MCP)** → the agent's scheduling, repurpose-from-post, and post
+  metrics over Buffer's MCP connector (`mcp.buffer.com/mcp`).
+
+Tokens and API keys are AES-256-GCM encrypted at rest.
 
 - **Redirect URI:** `{origin}/api/integrations/buffer/callback`.
 - Needs `BUFFER_CLIENT_ID/SECRET` + a stable `BUFFER_TOKEN_ENCRYPTION_KEY`.
@@ -843,6 +945,71 @@ platform's Buffer service id.
 
 **Auth:** required. Deletes the connection row (and encrypted tokens).
 `{ "ok": true }`.
+
+### `GET` / `PUT` / `DELETE /api/integrations/buffer/api-key` — MCP connector key
+
+**Auth:** required. Manages the per-user Buffer API key
+(`publish.buffer.com/settings/api`) that authenticates the agent's MCP connector
+(agent scheduling, repurpose-from-post, metrics). Encrypted at rest; the key
+never leaves the server — this surface only reports whether one exists.
+
+- `GET` → `{ "ok": true, "hasApiKey": boolean }`.
+- `PUT` body `{ "apiKey": string }` → saves/overwrites. Rejects an empty key →
+  `400`; `buffer_connections.api_key` column missing (migration `20260910000001`
+  not applied) → `503` with a hint; `BUFFER_TOKEN_ENCRYPTION_KEY` missing →
+  `500` with a config hint. Success → `{ "ok": true, "hasApiKey": true }`.
+- `DELETE` → drops the key (any OAuth connection is untouched) →
+  `{ "ok": true, "hasApiKey": false }`.
+
+An api-key-only row uses sentinel OAuth values (`buffer_account_id='api-key'`,
+blank `access_token`) so it is **never** treated as an OAuth connection — manual
+GraphQL "Send now" stays OAuth-gated.
+
+---
+
+## Health & diagnostics
+
+### `GET /api/healthz` — liveness + readiness probe
+
+**Public.** Lightweight Supabase reachability check (3s timeout) plus env
+region/commit. `200` when the DB responds, `503` when degraded:
+
+```json
+{ "status": "ok|degraded", "ok": boolean, "service": "verv-ai-backend",
+  "version": "0.1.0", "db": "ok|degraded", "region": "...|null",
+  "commit": "...|null", "time": "ISO" }
+```
+
+### `GET /api/healtz` — liveness probe
+
+**Public.** Minimal reachability ping (e.g.
+`https://vervai.onrender.com/api/healtz`), always `200`:
+
+```json
+{ "status": "ok", "ok": true, "service": "verv-ai-backend", "time": "ISO" }
+```
+
+### `GET /api/integrations/debug` — OAuth diagnostics
+
+**Auth:** required. Prints the **exact redirect URIs** that must be registered in
+each provider console (directly diagnoses `redirect_uri_mismatch`), plus env
+presence — never secrets:
+
+```json
+{
+  "env": { "nextPublicAppUrl": "...|null", "requestOrigin": "...",
+           "effectiveBase": "..." },
+  "google": { "clientId": bool, "clientSecret": bool },
+  "buffer": { "clientId": bool, "clientSecret": bool, "encryptionKey": bool,
+              "youtubeEncryptionKey": bool },
+  "redirectUris": { "youtube": "...", "drive": "...", "buffer": "..." },
+  "hint": "…"
+}
+```
+
+`effectiveBase` shows the origin `NEXT_PUBLIC_APP_URL` resolves to (a
+localhost/private pin reaching a public request is ignored in favor of the real
+request origin).
 
 ---
 
@@ -884,7 +1051,8 @@ every user-owned table has per-user RLS (`auth.uid() = user_id`).
 | `transcripts` | Canonical transcript per source | `unique (source_id)`; `provider` `assemblyai\|youtube_captions\|transcript_file` |
 | `user_prompts` | Prompt overrides + brand voice | PK `(user_id, format)` |
 | `youtube_connections` | YouTube OAuth | `unique (user_id)`; tokens AES-GCM encrypted |
-| `buffer_connections` | Buffer OAuth | `unique (user_id)`; tokens AES-GCM encrypted |
+| `drive_connections` | Google Drive OAuth | `unique (user_id)`; tokens AES-GCM encrypted (same key as YouTube) |
+| `buffer_connections` | Buffer OAuth + MCP key | `unique (user_id)`; tokens + `api_key` AES-GCM encrypted |
 | `content_intelligence` | Grounded analysis per source | `unique (source_id)`; `intelligence jsonb` + `provenance` |
 | `profiles` | Billing plan | **service-role write only**, read-own only |
 | `events` | Analytics ledger | RLS on, **no policies** (service-role write) |

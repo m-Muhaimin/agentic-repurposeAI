@@ -18,7 +18,8 @@ Optional:
   (`gemini-3.6-flash`), OpenRouter fallback, AssemblyAI transcription (file path only).
 - Inputs: file upload (audio/video), YouTube URL (captions via OAuth, or archived yt-dlp
   fallback), transcript files (`.srt/.vtt/.txt/.md/.markdown`), documents (`pdf/docx`), images,
-  and pasted links / URLs / podcast feeds.
+  Google Drive files (read-only, via a connected Drive account), and pasted links / URLs / podcast
+  feeds.
 - Outputs (frozen union): `linkedin_post`, `newsletter`, `shortform_script`. Single source of
   truth for "what outputs exist" is the Output Registry (`lib/output-registry/definitions.ts`).
 - Agent: `/agent` plans angles, gates them behind human approval, executes generation, and
@@ -93,7 +94,8 @@ Source of truth: `supabase/migrations/`. Every user-owned table has per-user RLS
 - `transcripts` — canonical transcript per source (`unique (source_id)`; provider
   `assemblyai|youtube_captions|transcript_file`).
 - `user_prompts` — PK `(user_id, format)`; override or empty=default; `brand_voice` row.
-- `youtube_connections` / `buffer_connections` — OAuth, tokens AES-256-GCM encrypted, `unique(user_id)`.
+- `youtube_connections` / `drive_connections` / `buffer_connections` — OAuth, tokens AES-256-GCM
+  encrypted, `unique(user_id)`. `buffer_connections.api_key` (AES-GCM) powers the MCP connector.
 - `content_intelligence` — grounded analysis (`unique (source_id)`, jsonb + provenance).
 - `profiles` — plan (`beta|creator|pro|studio`) + `plan_status`; service-role write.
 - `events` — analytics ledger, no client policies. `usage_events` — `reserve|consume|refund|release`.
@@ -216,6 +218,14 @@ no Authorization header). Full details: [docs/API.md](docs/API.md).
   mode:"queue|send", profileIds?, scheduledAt? }`. `queue` = pending-approval `scheduled` job;
   `send` = real Buffer post (503 `PUBLISH_NOT_CONNECTED`, 502 `PUBLISH_FAILED`). Never a
   fabricated `published` state.
+- `POST /api/agent/repurpose` — repurpose a Buffer post as a new transcript-style source + run
+  `{ postId, mode? }` → `201 { ok, sourceId, run }` (503 `NO_BUFFER_API_KEY`, 422 no-text, 502 MCP).
+- `GET /api/agent/posts?status=` — the caller's Buffer posts via the MCP connector for the
+  repurpose picker → `{ ok, posts[] }` (503 `NO_BUFFER_API_KEY`, 502 MCP).
+- `POST /api/agent/metrics/refresh` — pull fresh Buffer post metrics onto `v4_distribution_jobs`
+  (capped 4×100) → `{ ok, … }` (503 `NO_BUFFER_API_KEY`).
+- `GET /api/agent/runs/[id]/graph` — rebuild the run's workflow graph from durable state
+  (intelligence counts only, never transcript/evidence text) → `{ graph }`.
 
 ### YouTube integration
 
@@ -226,6 +236,16 @@ no Authorization header). Full details: [docs/API.md](docs/API.md).
 - `GET /api/integrations/youtube/videos` — user's uploads (25) for the picker.
 - `DELETE /api/integrations/youtube/disconnect` — remove connection + tokens.
 
+### Google Drive integration
+
+- `GET /api/integrations/drive/connect` — Google consent (reuses `GOOGLE_CLIENT_ID`; scope
+  `drive.readonly`; `gd_oauth_state` CSRF cookie).
+- `GET /api/integrations/drive/callback` — OAuth exchange → `/connections?success=drive`.
+- `GET /api/integrations/drive/status` — `{ connected, email, name }`.
+- `DELETE /api/integrations/drive/disconnect` — remove connection + tokens.
+- Redirect URI `{origin}/api/integrations/drive/callback` is a **separate** Google Cloud console
+  entry from the YouTube callback.
+
 ### Buffer integration
 
 - `GET /api/integrations/buffer/connect` — redirect to Buffer consent (PKCE S256; state+verifier
@@ -234,6 +254,17 @@ no Authorization header). Full details: [docs/API.md](docs/API.md).
 - `GET /api/integrations/buffer/profiles?platform=` — Buffer profiles (optionally by service id);
   `PUBLISH_NOT_CONNECTED` / `PROFILES_FAILED` codes.
 - `DELETE /api/integrations/buffer/disconnect` — remove connection + tokens.
+- `GET|PUT|DELETE /api/integrations/buffer/api-key` — per-user MCP API key management (AES-GCM at
+  rest): GET `{ hasApiKey }`, PUT `{ apiKey }`, DELETE drops it. Api-key-only rows keep the manual
+  GraphQL "Send now" path OAuth-gated.
+
+### Health & diagnostics
+
+- `GET /api/healthz` — public liveness + readiness (Supabase reachability, 3s timeout) → `200`/`503`.
+- `GET /api/healtz` — public minimal liveness ping → `200` (e.g.
+  `https://vervai.onrender.com/api/healtz`).
+- `GET /api/integrations/debug` — authed OAuth diagnostics: the exact youtube/drive/buffer
+  redirect URIs to register (fixes `redirect_uri_mismatch`) + env presence, never secrets.
 
 ### Error & SSE conventions
 

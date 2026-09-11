@@ -10,6 +10,7 @@ Complete HTTP API reference: [docs/API.md](docs/API.md).
 
 Primary resource:
 - [API Reference](docs/API.md) — exhaustive reference for the HTTP surface under `app/api/**`
+  (core pipeline, agentic API incl. Buffer MCP, YouTube + Drive + Buffer OAuth, health & diagnostics)
 
 Recommended resources:
 - [Data Model](docs/data-model.md) — table-level authority for the Supabase schema
