@@ -13,7 +13,7 @@ import type { ContentPlan, OutputFormat } from "@/types/agent";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const MODEL = "gemini-3.6-flash";
 
-const OUTPUT_FORMATS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script"];
+const OUTPUT_FORMATS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"];
 
 // Hard grammar from the prompt. If the model ignores it, the parser rejects.
 const SYSTEM_PROMPT = `You are the content strategist half of an agentic repurposing tool.
@@ -24,7 +24,7 @@ Rules:
 - Each angle must be genuinely distinct in audience hook, not three re-wordings of one idea.
 - For each angle give: title (a working hook the creator would recognise), a 1-2 sentence
   description of the piece, 1-3 suggested output formats from
-  [linkedin_post, newsletter, shortform_script] that fit that angle best,
+  [linkedin_post, newsletter, shortform_script, thread, carousel] that fit that angle best,
   0-2 short pull-quotes taken VERBATIM from the transcript (no paraphrase),
   and a one-line rationale for why the angle works.
 - Prefer concrete moments, numbers, and unusual claims over generic themes.
@@ -33,7 +33,7 @@ Rules:
 type ContentIdea = {
   title: string;
   description: string;
-  suggestedFormats: Array<"linkedin_post"|"newsletter"|"shortform_script">;
+  suggestedFormats: Array<"linkedin_post"|"newsletter"|"shortform_script"|"thread"|"carousel">;
   quotes: string[];
   rationale: string;
 };

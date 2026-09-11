@@ -74,8 +74,9 @@ OpenRouter fallback + AssemblyAI transcription.
 
 ## 2. Output flow — generation
 
-- Formats are fixed at `linkedin_post | newsletter | shortform_script`
-  (`lib/billing/plans.ts` `OUTPUT_FORMATS`, mirrored in `types/agent.ts`).
+- Formats: the registry's five (`linkedin_post | newsletter | shortform_script |
+  thread | carousel`), mirrored in `lib/billing/plans.ts` `OUTPUT_FORMATS` (and
+  `types/agent.ts`).
 - Generation lives in `lib/ai/generate.ts` (Gemini `gemini-3.6-flash`, Google
   `RetryInfo`-aware backoff via `lib/ai/retry.ts`, OpenRouter quota fallback).
 - The worker writes one `outputs` row per format, per source. The agent's
@@ -360,7 +361,7 @@ Verified understanding of the six audit axes:
 
 - [x] **Source flow** — enqueue→worker; `ingestSource` seam; three providers;
   `sources.status` + `jobs.status` + `transcripts.status` lifecycle.
-- [x] **Output flow** — `outputs` table, three formats, deterministic
+- [x] **Output flow** — `outputs` table, five formats, deterministic
   evaluation, bounded regeneration, edit signals on agent drafts.
 - [x] **Agent flow** — one durable orchestrator, tool registry + per-mode
   capabilities, human gate, P0 outcome-first composer, strategy engine, real
@@ -525,15 +526,18 @@ single source of truth instead of duplicated lists.
   fully met score 0 and are excluded; qualifying outputs score 0.5→1 by how far
   counts overshoot the minimum. `validate(id, content)` enforces word/char
   bounds — the raw material for Phase 7's quality gate.
-- **`lib/output-registry/definitions.ts`** — the three built-ins
-  (linkedin_post / newsletter / shortform_script) with their evidence gates,
-  validation bounds, and the exact same system prompts generation always used.
+- **`lib/output-registry/definitions.ts`** — the five built-ins
+  (linkedin_post / newsletter / shortform_script / thread / carousel) with their
+  evidence gates, validation bounds, and the exact same system prompts
+  generation always used.
 - **`lib/output-registry/index.ts`** — registers built-ins at module load and
   re-exports the surface.
 - **`lib/ai/prompts.ts`** — now a thin façade over the registry
   (`FORMATS`/`PROMPTS`/`buildSystemPrompt` shapes unchanged) so all existing
-  callers keep working while the registry becomes the source of truth. New
-  outputs added to the registry automatically appear everywhere.
+  callers keep working while the registry becomes the source of truth. Widen
+  the `OutputFormat` union (and the copies in `types/agent.ts`,
+  `types/supabase.ts`, `lib/billing/plans.ts`) deliberately and in lock-step
+  when a new registry format becomes a first-class LLM format.
 - **Worker (`app/api/process/route.ts`)** derives its format list from
   `outputRegistry.formats()` instead of a hard-coded array.
 - **Tests**: `lib/output-registry/registry.test.ts` (10 tests — built-in

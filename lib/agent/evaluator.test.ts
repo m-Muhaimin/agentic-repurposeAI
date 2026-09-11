@@ -40,10 +40,34 @@ describe("evaluateDraft", () => {
     expect(result.flags).toContain("format_shape");
   });
 
+  it("flags threads missing numbered post markers (1/N)", () => {
+    const flat = "One long block of text with no numbering whatsoever.".repeat(30);
+    const result = evaluateDraft("thread", flat, TRANSCRIPT);
+    expect(result.flags).toContain("format_shape");
+  });
+
+  it("passes threads with numbered post markers", () => {
+    const thread = "1/3 Consistency beats virality.\n\n2/3 The habit compounds.\n\n3/3 Number the takeaways.";
+    const result = evaluateDraft("thread", thread, TRANSCRIPT);
+    expect(result.flags).not.toContain("format_shape");
+  });
+
+  it("flags carousels missing slide separators", () => {
+    const flat = "A wall of text that never marks slides at all.".repeat(30);
+    const result = evaluateDraft("carousel", flat, TRANSCRIPT);
+    expect(result.flags).toContain("format_shape");
+  });
+
+  it("passes carousels with slide separators", () => {
+    const carousel = "Slide 1\nWhat consistency does\n\n---\nSlide 2\nThe compounding effect\n\n---\nSlide 3\nThe CTA";
+    const result = evaluateDraft("carousel", carousel, TRANSCRIPT);
+    expect(result.flags).not.toContain("format_shape");
+  });
+
   it("scoring weights match the documented rubric", () => {
     // length 0.4 / format_shape 0.3 / grounding 0.3
     expect(Object.keys(LENGTH_SPECS).sort()).toEqual(
-      ["linkedin_post", "newsletter", "shortform_script"].sort()
+      ["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"].sort()
     );
   });
 });

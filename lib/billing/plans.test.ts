@@ -35,6 +35,8 @@ describe("plans config", () => {
   it("isOutputFormat is the single format vocabulary", () => {
     expect(isOutputFormat("linkedin_post")).toBe(true);
     expect(isOutputFormat("shortform_script")).toBe(true);
+    expect(isOutputFormat("thread")).toBe(true);
+    expect(isOutputFormat("carousel")).toBe(true);
     expect(isOutputFormat("tiktok")).toBe(false);
     expect(isOutputFormat(undefined)).toBe(false);
   });

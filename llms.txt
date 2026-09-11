@@ -1,9 +1,10 @@
 # VervAI
 
 > A long-form → short-form content engine: upload an audio/video file, a YouTube URL, a subtitle
-> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section, and
-> short-form video scripts — generated in your voice. Includes an agentic layer (`/agent`) that
-> plans content angles from a transcript, human-gates them, then generates and evaluates drafts.
+> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section,
+> short-form video scripts, an X/LinkedIn thread, or a carousel script — generated in your voice.
+> Includes an agentic layer (`/agent`) that plans content angles from a transcript, human-gates
+> them, then generates and evaluates drafts.
 
 Full content is available in [llms-full.txt](llms-full.txt).
 Complete HTTP API reference: [docs/API.md](docs/API.md).

@@ -91,7 +91,7 @@ States audited: empty / loading / error / success, flow entry→exit, dead ends,
 
 ### 3.2 Upload — `app/upload/page.tsx`
 - **Purpose**: manually create drafts ("Turn your content into LinkedIn, newsletter & short-form scripts").
-- **H1**: "Repurpose content" submit. H2: source-type segmented control (Upload media / YouTube URL / Transcript), format checkboxes (LinkedIn post, Newsletter, Short-form script), "Add AI impact statements" option.
+- **H1**: "Repurpose content" submit. H2: source-type segmented control (Upload media / YouTube URL / Transcript), format checkboxes (LinkedIn post, Newsletter, Short-form script, Thread, Carousel), "Add AI impact statements" option.
 - **States**: busy label "Creating your drafts…" during ingestion; usage-limit gate served by `UsageNotice` (warns 80%+, blocks 100%). Upload validation error is inline red alert (catches long videos before transcription).
 - **Flow**: submit → POST → on success `router.push("/dashboard")` — the upload page itself gives **no success state or link to the new source**; the user must find the row on the dashboard. Acceptable but abrupt; a "View your drafts" redirect with the new source highlighted would remove the dead-end feel.
 - **Gaps**: no sticky action bar on mobile (form is short, so OK). No per-format guidance/additional context. The format set here and the format set in the agent differ in UX copy? (they share `FORMAT_LABEL` — but the editor re-declares it). Fine for now.
@@ -200,7 +200,7 @@ States audited: empty / loading / error / success, flow entry→exit, dead ends,
 
 ## 5. Duplication log (consolidate in Phase 1)
 
-1. `FORMAT_LABEL` (LinkedIn post / Newsletter / Short-form script): `app/library/source-list.tsx`, `app/repurpose/[id]/page.tsx`, `components/agent/run-detail.tsx`, `lib/agent/strategy-panel-helpers.ts`, `types/agent.ts` — 5 copies.
+1. `FORMAT_LABEL` (LinkedIn post / Newsletter / Short-form script / Thread / Carousel): `app/library/source-list.tsx`, `app/repurpose/[id]/page.tsx`, `components/agent/run-detail.tsx`, `lib/agent/strategy-panel-helpers.ts`, `types/agent.ts` — 5 copies.
 2. Agent status vocab: `RUN_LABEL` (`types/agent.ts`), `RUN_LABEL`+`RUN_STYLE` (`run-list.tsx`), `AGENT_STATUS_LABEL`/`AGENT_STATUS_STYLE` (`lib/status.ts`), `KIND_LABEL`/`STATUS_STYLE` (`timeline.tsx`) — 4 maps that should be one shared module.
 3. Format/type label maps for source types (`SOURCE_TYPE_LABEL`) duplicated too.
 4. Alert banners / inline status bars (5 bespoke variants).

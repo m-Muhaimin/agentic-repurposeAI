@@ -23,6 +23,8 @@ describe("OUTPUT_FORMAT_TO_PLATFORM", () => {
   it("maps delivered formats to Buffer platforms honestly (newsletter has none)", () => {
     expect(OUTPUT_FORMAT_TO_PLATFORM.linkedin_post).toBe("linkedin");
     expect(OUTPUT_FORMAT_TO_PLATFORM.shortform_script).toBe("x");
+    expect(OUTPUT_FORMAT_TO_PLATFORM.thread).toBe("x");
+    expect(OUTPUT_FORMAT_TO_PLATFORM.carousel).toBe("linkedin");
     expect(OUTPUT_FORMAT_TO_PLATFORM.newsletter).toBeUndefined();
   });
 });

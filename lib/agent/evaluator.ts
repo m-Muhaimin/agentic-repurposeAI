@@ -25,7 +25,9 @@ export interface LengthSpec {
 export const LENGTH_SPECS: Record<OutputFormat, LengthSpec> = {
   linkedin_post: { min: 600, max: 1400, tolerance: 0.15 },
   newsletter: { min: 180, max: 500, tolerance: 0.15 },
-  shortform_script: { min: 150, max: 700, tolerance: 0.2 }
+  shortform_script: { min: 150, max: 700, tolerance: 0.2 },
+  thread: { min: 400, max: 8000, tolerance: 0.2 },
+  carousel: { min: 400, max: 8000, tolerance: 0.2 }
 };
 
 // Format-shape heuristics: a draft gets partial credit when it has the rough
@@ -49,6 +51,18 @@ function formatShapeScore(format: OutputFormat, content: string): { score: numbe
       if (beats >= 3) return { score: 1, note: `${beats} timed beats found.` };
       if (beats === 0) return { score: 0.2, note: "No HOOK/SETUP/PAYOFF/CTA beats." };
       return { score: 0.6, note: `${beats}/4 beats — partial skeleton.` };
+    case "thread":
+      // Numbered posts ("1/7", "2/7", "Thread (2/N):") are the format's promise.
+      const postMarkers = (content.match(/(?:^|\n)\s*\d+\s*\/\s*\d+/g) ?? []).length;
+      if (postMarkers >= 2) return { score: 1, note: `${postMarkers} numbered post markers found.` };
+      if (postMarkers === 1) return { score: 0.6, note: `${postMarkers} numbered post marker — partial skeleton.` };
+      return { score: 0.2, note: "No 1/N post numbering — reads like one long post, not a thread." };
+    case "carousel":
+      // Slide separators (Slide 1, "---", or "##") are the format's promise.
+      const slides = (content.match(/^\s*(?:slide\s*\d+|---+|##+)\s*$/gim) ?? []).length;
+      if (slides >= 3) return { score: 1, note: `${slides} slide separators found.` };
+      if (slides === 0) return { score: 0.2, note: "No slide separators — reads like a single wall of text." };
+      return { score: 0.6, note: `${slides} slide separators — partial skeleton.` };
   }
 }
 

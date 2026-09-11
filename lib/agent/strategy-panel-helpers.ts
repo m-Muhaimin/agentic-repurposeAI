@@ -7,7 +7,9 @@ import type { OutputFormat } from "@/types/agent";
 export const FORMAT_LABEL: Record<OutputFormat, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 export function formatScore(score: number): string {

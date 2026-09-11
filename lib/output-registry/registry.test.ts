@@ -44,8 +44,8 @@ function minimal(overrides: Partial<ContentIntelligence> = {}): ContentIntellige
 }
 
 describe("outputRegistry (built-in definitions)", () => {
-  it("registers the three core formats in insertion order", () => {
-    expect(outputRegistry.formats()).toEqual(["linkedin_post", "newsletter", "shortform_script"]);
+  it("registers the five core formats in insertion order", () => {
+    expect(outputRegistry.formats()).toEqual(["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"]);
     for (const id of outputRegistry.formats()) {
       const def = outputRegistry.get(id);
       expect(def).toBeTruthy();
@@ -68,8 +68,9 @@ describe("outputRegistry.recommend (compatibility surface)", () => {
   });
 
   it("excludes outputs whose evidence gate is unmet", () => {
-    // No hooks/claims → linkedin_post (needs topics+claims+hooks) and
-    // shortform_script (needs topics+hooks) are excluded; newsletter needs
+    // No hooks/claims → linkedin_post (needs topics+claims+hooks), shortform_script
+    // (needs topics+hooks), thread (needs hooks≥2, claims≥3, stories≥1) and
+    // carousel (needs topics+claims+hooks) are excluded; newsletter needs
     // topics+claims only, so it qualifies.
     const recs = outputRegistry.recommend(
       minimal({
@@ -81,7 +82,34 @@ describe("outputRegistry.recommend (compatibility surface)", () => {
     );
     expect(recs.map((r) => r.definition.id)).not.toContain("linkedin_post");
     expect(recs.map((r) => r.definition.id)).not.toContain("shortform_script");
+    expect(recs.map((r) => r.definition.id)).not.toContain("thread");
+    expect(recs.map((r) => r.definition.id)).not.toContain("carousel");
     expect(recs.map((r) => r.definition.id)).toContain("newsletter");
+  });
+
+  it("qualifies thread and carousel when their evidence gates are met", () => {
+    const recs = outputRegistry.recommend(
+      minimal({
+        topics: [
+          { label: "t1", occurrences: 2, confidence: 0.5 },
+          { label: "t2", occurrences: 1, confidence: 0.4 }
+        ],
+        claims: [
+          { text: "c1", stance: "assertion", confidence: 0.6, evidence: { text: "x", start: 0, end: 1, verbatim: true } },
+          { text: "c2", stance: "assertion", confidence: 0.6, evidence: { text: "x", start: 0, end: 1, verbatim: true } },
+          { text: "c3", stance: "assertion", confidence: 0.6, evidence: { text: "x", start: 0, end: 1, verbatim: true } },
+          { text: "c4", stance: "assertion", confidence: 0.6, evidence: { text: "x", start: 0, end: 1, verbatim: true } }
+        ],
+        hooks: [
+          { text: "h1", kind: "opening", evidence: { text: "x", start: 0, end: 1, verbatim: true } },
+          { text: "h2", kind: "opening", evidence: { text: "x", start: 0, end: 1, verbatim: true } }
+        ],
+        stories: [{ summary: "we hired six engineers", evidence: [{ text: "we hired six engineers", start: 0, end: 10, verbatim: true }] }]
+      })
+    );
+    const ids = recs.map((r) => r.definition.id);
+    expect(ids).toContain("thread");
+    expect(ids).toContain("carousel");
   });
 
   it("gives a higher score when more evidence is available (monotonicity)", () => {
@@ -204,8 +232,8 @@ describe("legacy façade ↔ registry alignment (lib/ai/prompts)", () => {
   // never drift from the built-in prompt strings the generate pipeline uses.
   // These assertions pin the contract between the two so a future contributor
   // who widens the registry cannot accidentally change legacy behavior.
-  it("exposes exactly the three legacy formats, in registry order", () => {
-    expect(FORMATS).toEqual(["linkedin_post", "newsletter", "shortform_script"]);
+  it("exposes exactly the five registry formats, in registry order", () => {
+    expect(FORMATS).toEqual(["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"]);
   });
 
   it("labels and descriptions agree with the registry definitions", () => {

@@ -28,8 +28,8 @@ export type Database = {
         Relationships: [];
       };
       outputs: {
-        Row: { id: string; source_id: string; user_id: string; format: "linkedin_post"|"newsletter"|"shortform_script"; content: string; regeneration_count: number; created_at: string; updated_at: string };
-        Insert: Partial<Database["public"]["Tables"]["outputs"]["Row"]> & { source_id: string; user_id: string; format: "linkedin_post"|"newsletter"|"shortform_script"; content: string };
+        Row: { id: string; source_id: string; user_id: string; format: "linkedin_post"|"newsletter"|"shortform_script"|"thread"|"carousel"; content: string; regeneration_count: number; created_at: string; updated_at: string };
+        Insert: Partial<Database["public"]["Tables"]["outputs"]["Row"]> & { source_id: string; user_id: string; format: "linkedin_post"|"newsletter"|"shortform_script"|"thread"|"carousel"; content: string };
         Update: Partial<Database["public"]["Tables"]["outputs"]["Row"]>;
         Relationships: [
           {

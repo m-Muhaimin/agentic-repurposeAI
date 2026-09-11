@@ -8,12 +8,14 @@
 // config flip, but their price stays out of the marketing site until launch.
 
 export type PlanId = "beta" | "creator" | "pro" | "studio";
-export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script";
+export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script" | "thread" | "carousel";
 
 export const OUTPUT_FORMATS: readonly OutputFormat[] = [
   "linkedin_post",
   "newsletter",
-  "shortform_script"
+  "shortform_script",
+  "thread",
+  "carousel"
 ];
 
 export function isOutputFormat(value: unknown): value is OutputFormat {

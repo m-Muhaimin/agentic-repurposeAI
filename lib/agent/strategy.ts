@@ -209,7 +209,7 @@ export function buildCandidates(input: StrategyInput): StrategyResult {
       sourceTitle: source.title,
       score: Math.round(score * 100) / 100,
       angleTitle: bestIdea?.title ?? null,
-      formats: suggested.length ? suggested : ["linkedin_post", "newsletter", "shortform_script"],
+      formats: suggested.length ? suggested : ["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"],
       reasons
     });
   }

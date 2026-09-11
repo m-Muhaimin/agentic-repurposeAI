@@ -1,8 +1,9 @@
 # VervAI
 
 > A long-form → short-form content engine: upload an audio/video file, a YouTube URL, a subtitle
-> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section, and
-> short-form video scripts — generated in your voice. Includes an agentic layer (`/agent`) that
+> file, a document, or a pasted link, and get back a LinkedIn post, a newsletter section, a
+> short-form video script, an X/LinkedIn thread, or a carousel script — generated in your voice.
+> Includes an agentic layer (`/agent`) that
 > plans content angles from a transcript, human-gates them, then generates and evaluates drafts.
 
 [API Reference](docs/API.md) · [Data Model](docs/data-model.md) · [Architecture Freeze](docs/ARCHITECTURE_FREEZE.md) · [Implementation Map](docs/IMPLEMENTATION_MAP.md) · [Roadmap](docs/ROADMAP.md)
@@ -20,8 +21,9 @@ Optional:
   fallback), transcript files (`.srt/.vtt/.txt/.md/.markdown`), documents (`pdf/docx`), images,
   Google Drive files (read-only, via a connected Drive account), and pasted links / URLs / podcast
   feeds.
-- Outputs (frozen union): `linkedin_post`, `newsletter`, `shortform_script`. Single source of
-  truth for "what outputs exist" is the Output Registry (`lib/output-registry/definitions.ts`).
+- Outputs (frozen union): `linkedin_post`, `newsletter`, `shortform_script`, `thread`, `carousel`.
+  Single source of truth for "what outputs exist" is the Output Registry
+  (`lib/output-registry/definitions.ts`).
 - Agent: `/agent` plans angles, gates them behind human approval, executes generation, and
   deterministically evaluates drafts. Modes `assist | execute | automate`.
 - Publish: bring-your-own Buffer account — human-initiated send / schedule, never autonomous.
@@ -88,7 +90,7 @@ Source of truth: `supabase/migrations/`. Every user-owned table has per-user RLS
 - `sources` — one input per row (`source_type: audio|video|youtube|transcript`; status
   `uploaded|transcribing|transcribed|generating|done|failed`; `storage_path`/`source_url`;
   `content_hash` dedupe).
-- `outputs` — one row per (source, format); `format: linkedin_post|newsletter|shortform_script`;
+- `outputs` — one row per (source, format); `format: linkedin_post|newsletter|shortform_script|thread|carousel`;
   `regeneration_count`; **no client UPDATE policy**.
 - `jobs` — queue (`queued|running|done|failed`), `formats text[]`, `idempotency_key`, `refunded`.
 - `transcripts` — canonical transcript per source (`unique (source_id)`; provider

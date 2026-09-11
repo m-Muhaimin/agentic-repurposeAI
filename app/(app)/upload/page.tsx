@@ -39,7 +39,9 @@ const MODES = [
 const FORMATS = [
   { id: "linkedin_post", label: "LinkedIn post" },
   { id: "newsletter", label: "Newsletter section" },
-  { id: "shortform_script", label: "Short-form script" }
+  { id: "shortform_script", label: "Short-form script" },
+  { id: "thread", label: "Thread" },
+  { id: "carousel", label: "Carousel" }
 ] as const;
 
 export default function UploadPage() {
@@ -48,7 +50,11 @@ export default function UploadPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [title, setTitle] = useState("");
-  const [formats, setFormats] = useState<string[]>(FORMATS.map((f) => f.id));
+  // Default to the classic three — the beta plan caps outputs per job at 3, and
+  // the server rejects a formats list longer than the plan cap. Thread/carousel
+  // are available to toggle on (checkbox UI disables beyond the cap once usage
+  // loads).
+  const [formats, setFormats] = useState<string[]>(FORMATS.slice(0, 3).map((f) => f.id));
   const [ytStatus, setYtStatus] = useState<{ connected: boolean; channelTitle: string | null }>({
     connected: false,
     channelTitle: null
@@ -601,8 +607,7 @@ export default function UploadPage() {
                   Pick which drafts to generate
                   {usage?.maxOutputsPerJob
                     ? ` — up to ${usage.maxOutputsPerJob} per job, all of them is the move`
-                    : " — all three is the move"}
-                  .
+                    : " — the first three are pre-picked"}.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {FORMATS.map((f) => {

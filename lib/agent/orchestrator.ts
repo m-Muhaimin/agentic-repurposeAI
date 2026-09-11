@@ -427,7 +427,7 @@ async function runExecution(
   let attempted = 0;
   let completed = 0;
 
-  const FORMARTS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script"];
+  const FORMARTS: OutputFormat[] = ["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"];
 
   const guard = (inFlightSteps: number, inFlightCost: number): StopReason =>
     budgetViolation(

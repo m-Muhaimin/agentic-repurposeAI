@@ -178,7 +178,7 @@ const FAQS = [
   },
   {
     q: "What counts as a repurpose job?",
-    a: "One recording, transcript, or YouTube video turned into up to three drafts (a LinkedIn post, a newsletter section, and a short-form script). Watch the meter on the dashboard — each job deducts one."
+    a: "One recording, transcript, or YouTube video turned into up to five drafts (a LinkedIn post, a newsletter section, a short-form script, a thread, or a carousel). Watch the meter on the dashboard — each job deducts one."
   },
   {
     q: "Which content sources can I use?",
@@ -194,7 +194,7 @@ const FAQS = [
   }
 ];
 
-// Grounded mock of the real product: the exact three drafts the app produces,
+// Grounded mock of the real product: the exact five drafts the app produces,
 // with an honest in-progress state on one of them.
 const DRAFT_PREVIEWS = [
   {
@@ -249,7 +249,7 @@ export default function Home() {
                 <svg viewBox="0 0 24 24" fill="currentColor" className="size-3.5" aria-hidden="true">
                   <path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.6-6.3 4.6L8 13.8 2 9.2h7.6L12 2z" />
                 </svg>
-                One recording → three posts
+                One recording → five drafts
               </span>
 
               <h1 className="mt-5 font-display text-[32px] leading-[1.222] tracking-[-0.25px] md:text-[45px] md:leading-[1.156] lg:text-[57px] lg:leading-[1.123]">
@@ -258,8 +258,8 @@ export default function Home() {
               </h1>
 
               <p className="mt-6 max-w-lg text-base leading-normal tracking-[0.5px] text-theme-text-secondary">
-                Upload a podcast or YouTube video. We write a LinkedIn post, a newsletter section, and a short-form
-                script — tuned for each platform, not reformatted text.
+                Upload a podcast or YouTube video. We write a LinkedIn post, a newsletter section, a short-form
+                script, a thread, or a carousel — tuned for each platform, not reformatted text.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
@@ -674,8 +674,8 @@ export default function Home() {
                 Your next post is already in your recording.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-base leading-normal text-primary-100">
-                Add a recording and watch it become a LinkedIn post, a newsletter section, and a
-                short-form script in minutes — free during the beta.
+                Add a recording and watch it become a LinkedIn post, a newsletter section, a
+                short-form script, a thread, or a carousel in minutes — free during the beta.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-4">
                 <Link href="/upload" className="btn bg-white px-8 text-primary-500 hover:bg-primary-50">

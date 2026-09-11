@@ -1,7 +1,7 @@
 // Phase 6: Opportunity → output mapping.
 // Maps DerivedOpportunityKind values to output IDs using the registry's actual
-// IDs (linkedin_post, newsletter, shortform_script), each with a per-opportunity
-// strength boost (0.05..0.15). Deterministic, no LLM.
+// IDs (linkedin_post, newsletter, shortform_script, thread, carousel), each with
+// a per-opportunity strength boost (0.05..0.15). Deterministic, no LLM.
 
 import type { DerivedOpportunity, DerivedOpportunityKind } from "@/lib/intelligence/types";
 
@@ -26,7 +26,7 @@ const MAP: MappingEntry[] = [
   },
   {
     opportunityKind: "claim_post",
-    outputIds: ["linkedin_post", "newsletter"],
+    outputIds: ["linkedin_post", "newsletter", "thread"],
     strength: 0.12,
   },
   {
@@ -36,7 +36,7 @@ const MAP: MappingEntry[] = [
   },
   {
     opportunityKind: "quote_carousel",
-    outputIds: ["linkedin_post"],
+    outputIds: ["linkedin_post", "carousel"],
     strength: 0.05,
   },
 ];

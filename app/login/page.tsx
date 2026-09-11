@@ -93,7 +93,7 @@ export default function LoginPage() {
   const titles: Record<Mode, { h1: string; p: string; button: string }> = {
     signin: {
       h1: "Welcome back",
-      p: "One recording, three drafts — ready to edit.",
+      p: "One recording, five drafts — ready to edit.",
       button: "Sign in"
     },
     signup: {

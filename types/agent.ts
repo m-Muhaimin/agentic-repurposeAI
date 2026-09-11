@@ -105,18 +105,22 @@ export const PENDING_RUN_STATUS: readonly RunStatus[] = [
 ];
 
 // ── Output formats reused from the base app ─────────────────────────────────
-export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script";
+export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script" | "thread" | "carousel";
 
 export const OUTPUT_FORMATS: readonly OutputFormat[] = [
   "linkedin_post",
   "newsletter",
-  "shortform_script"
+  "shortform_script",
+  "thread",
+  "carousel"
 ];
 
 export const FORMAT_LABEL: Record<OutputFormat, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 // ── Agent step record (durable row shape) ───────────────────────────────────

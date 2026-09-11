@@ -44,7 +44,7 @@ export default function Footer() {
           <Logo />
           <p className="mt-4 text-sm leading-normal text-theme-text-secondary">
             {BRAND.tagline} Turn your recordings into a LinkedIn post, newsletter
-            section, and short-form script — all ready to edit.
+            section, short-form script, thread, or carousel — all ready to edit.
           </p>
           <p className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary-100 px-3 py-1 text-[12px] font-semibold text-primary-500">
             <svg

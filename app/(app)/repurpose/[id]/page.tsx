@@ -8,7 +8,9 @@ import Breadcrumbs from "@/components/breadcrumbs";
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter section",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 export default async function RepurposePage({ params }: { params: { id: string } }) {

@@ -15,7 +15,8 @@ const FIT_VALUE: Record<FitRating, number> = {
 
 // Every objective carries a mapping of outputId → { fit, reason }.
 // The output IDs here are the canonical ones registered in the Output Registry
-// (lib/output-registry/definitions.ts: linkedin_post, newsletter, shortform_script).
+// (lib/output-registry/definitions.ts: linkedin_post, newsletter, shortform_script,
+// thread, carousel).
 // If a new output is added, add its row here too — this is intentionally explicit
 // rather than auto-derived, so each objective's rationale is written by hand.
 
@@ -33,6 +34,14 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
       fit: "possible",
       reason: "Short clips help, but less consistently than owned channels",
     },
+    thread: {
+      fit: "strong",
+      reason: "A LinkedIn series compounds — every post extends your profile's presence",
+    },
+    carousel: {
+      fit: "strong",
+      reason: "LinkedIn document posts are the format the algorithm rewards most",
+    },
   },
 
   grow_email: {
@@ -47,6 +56,14 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
     shortform_script: {
       fit: "possible",
       reason: "Indirect — drives awareness, not subscribers directly",
+    },
+    thread: {
+      fit: "possible",
+      reason: "A thread builds profile reach, not email signups directly",
+    },
+    carousel: {
+      fit: "possible",
+      reason: "Carousels drive profile visits, not subscribers directly",
     },
   },
 
@@ -63,6 +80,14 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
       fit: "possible",
       reason: "Reach is limited to your list",
     },
+    thread: {
+      fit: "strong",
+      reason: "X/LinkedIn threads travel — each post is a chance to be reshared",
+    },
+    carousel: {
+      fit: "strong",
+      reason: "Carousels get saves and shares, which feeds the algorithm",
+    },
   },
 
   clarify_ideas: {
@@ -78,6 +103,14 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
       fit: "possible",
       reason: "Too compressed for deep clarification",
     },
+    thread: {
+      fit: "strong",
+      reason: "Post-by-post structure forces each idea into its own clear step",
+    },
+    carousel: {
+      fit: "good",
+      reason: "Slide-by-slide flow asks you to order the idea",
+    },
   },
 
   drive_action: {
@@ -92,6 +125,14 @@ const MAP: Record<Objective["kind"], Record<string, { fit: FitRating; reason: st
     shortform_script: {
       fit: "good",
       reason: "Hook + payoff can drive profile visits",
+    },
+    thread: {
+      fit: "good",
+      reason: "A thread can end on a strong CTA, but it asks more of the reader",
+    },
+    carousel: {
+      fit: "strong",
+      reason: "The closing slide is a built-in CTA moment",
     },
   },
 };

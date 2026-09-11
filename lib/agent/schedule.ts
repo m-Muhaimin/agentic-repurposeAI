@@ -37,10 +37,15 @@ type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
 // Which delivered format goes to which Buffer platform. `newsletter` is text
 // delivered by email (VervAI's own newsletter section); Buffer has no channel
-// for it, so it's honestly skipped with no fabricated job.
+// for it, so it's honestly skipped with no fabricated job. Threads schedule to
+// X (native thread destination); carousel scripts schedule to LinkedIn
+// (document-post destination) — both land in the queue as their source text,
+// ready for the creator to finalize into the native multi-asset post.
 export const OUTPUT_FORMAT_TO_PLATFORM: Partial<Record<OutputFormat, DistributionPlatform>> = {
   linkedin_post: "linkedin",
-  shortform_script: "x"
+  shortform_script: "x",
+  thread: "x",
+  carousel: "linkedin"
 };
 
 export interface ScheduleTarget {

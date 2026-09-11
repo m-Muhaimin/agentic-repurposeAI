@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const formats = normalizeFormats(rawFormats);
   if (formats === null) {
     return NextResponse.json(
-      { error: "Unsupported format. Use linkedin_post, newsletter, or shortform_script." },
+      { error: "Unsupported format. Use linkedin_post, newsletter, shortform_script, thread, or carousel." },
       { status: 400 }
     );
   }

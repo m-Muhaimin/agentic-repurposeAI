@@ -60,7 +60,7 @@ UPLOAD ──> transcription/processing ──> SOURCE (done)
 ## Design decisions
 
 1. **Upload purity** — the `Choose outputs` UI is gone. The backend still
-   enqueues all three formats (`ALL_FORMATS`), so nothing in the processing
+   enqueues all five registry formats, so nothing in the processing
    pipeline changed; the run's outputs are funneled into the `CREATE` node.
 2. **Graph derives from state, never persisted** — `buildAgentGraph` reads the
    same rows the dashboard read, so a stale cache cannot disagree with the run.

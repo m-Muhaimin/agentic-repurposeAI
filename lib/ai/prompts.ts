@@ -7,23 +7,27 @@
 
 import { outputRegistry } from "@/lib/output-registry";
 
-export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script";
+export type OutputFormat = "linkedin_post" | "newsletter" | "shortform_script" | "thread" | "carousel";
 
 export const FORMATS: OutputFormat[] =
   outputRegistry.formats().filter((f): f is OutputFormat =>
-    ["linkedin_post", "newsletter", "shortform_script"].includes(f)
+    ["linkedin_post", "newsletter", "shortform_script", "thread", "carousel"].includes(f)
   );
 
 export const FORMAT_LABELS: Record<OutputFormat, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter section",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 export const FORMAT_DESCRIPTIONS: Record<OutputFormat, string> = {
   linkedin_post: "The post that shows up on your profile.",
   newsletter: "One standalone section for your email newsletter.",
-  shortform_script: "A 30–45 second TikTok/Reels/Shorts script with timed beats."
+  shortform_script: "A 30–45 second TikTok/Reels/Shorts script with timed beats.",
+  thread: "A multi-post thread for X/Twitter or a LinkedIn series.",
+  carousel: "A slide-by-slide carousel script for LinkedIn document posts or Instagram."
 };
 
 // Custom prompts can override each format's default below, plus a global
@@ -36,7 +40,9 @@ export type PromptKey = (typeof PROMPT_KEYS)[number];
 export const PROMPTS: Record<OutputFormat, string> = {
   linkedin_post: outputRegistry.get("linkedin_post")?.systemPrompt ?? "",
   newsletter: outputRegistry.get("newsletter")?.systemPrompt ?? "",
-  shortform_script: outputRegistry.get("shortform_script")?.systemPrompt ?? ""
+  shortform_script: outputRegistry.get("shortform_script")?.systemPrompt ?? "",
+  thread: outputRegistry.get("thread")?.systemPrompt ?? "",
+  carousel: outputRegistry.get("carousel")?.systemPrompt ?? ""
 };
 
 /**

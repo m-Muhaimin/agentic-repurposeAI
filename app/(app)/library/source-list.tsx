@@ -11,7 +11,9 @@ import { PENDING_STATUS, statusLabel } from "@/lib/status";
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter section",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 const SOURCE_TYPE_LABEL: Record<string, string> = {

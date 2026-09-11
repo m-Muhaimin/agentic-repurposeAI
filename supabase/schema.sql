@@ -36,7 +36,7 @@
 -- If you've already created the tables before format selection + in-page editing,
 -- run this migration to add the two new columns:
 --   alter table public.jobs add column if not exists formats text[] not null
---     default array['linkedin_post', 'newsletter', 'shortform_script']::text[];
+--     default array['linkedin_post', 'newsletter', 'shortform_script', 'thread', 'carousel']::text[];
 --   alter table public.outputs add column if not exists updated_at timestamptz not null default now();
 --
 -- If you've already created the tables before custom prompts (the "Customise"
@@ -166,12 +166,12 @@ create policy "Users can delete their own sources"
   on public.sources for delete
   using (auth.uid() = user_id);
 
--- ── Outputs: the three generated formats per source ───────────────────────
+-- ── Outputs: the generated formats per source ──────────────────────────────
 create table if not exists public.outputs (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references public.sources(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  format text not null check (format in ('linkedin_post', 'newsletter', 'shortform_script')),
+  format text not null check (format in ('linkedin_post', 'newsletter', 'shortform_script', 'thread', 'carousel')),
   content text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -198,7 +198,7 @@ create table if not exists public.jobs (
     status in ('queued', 'running', 'done', 'failed')
   ),
   attempt int not null default 0,
-  formats text[] not null default array['linkedin_post', 'newsletter', 'shortform_script']::text[],
+  formats text[] not null default array['linkedin_post', 'newsletter', 'shortform_script', 'thread', 'carousel']::text[],
   error_message text,
   created_at timestamptz not null default now(),
   started_at timestamptz,

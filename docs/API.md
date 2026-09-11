@@ -2,7 +2,8 @@
 
 VervAI is a Next.js 14 (App Router) application that turns long-form content
 (audio/video files, YouTube URLs, transcripts, documents, URLs) into short-form
-drafts (LinkedIn post, newsletter section, short-form script) plus an agentic
+drafts (LinkedIn post, newsletter section, short-form script, thread, carousel)
+plus an agentic
 layer that plans, gates and executes content angles.
 
 This document is the complete reference for the HTTP surface under `app/api/**`
@@ -168,7 +169,7 @@ Request body:
 ```json
 {
   "sourceId": "uuid",                       // required
-  "formats": ["linkedin_post", "newsletter"], // optional; empty = all three defaults
+  "formats": ["linkedin_post", "newsletter"], // optional; empty = all five defaults
   "idempotencyKey": "any-string",           // optional, per-user replay key
 }
 ```
@@ -176,7 +177,7 @@ Request body:
 Guards, in order:
 
 1. `sourceId` present → `400 {"error":"sourceId is required"}`.
-2. `formats` valid ids (`linkedin_post|newsletter|shortform_script`) → `400`
+2. `formats` valid ids (`linkedin_post|newsletter|shortform_script|thread|carousel`) → `400`
    otherwise.
 3. Signed in → `401`.
 4. Source exists **and belongs to the caller** → `404`.
@@ -235,7 +236,7 @@ Job flow (each stage emits `progress`):
 5. **Content intelligence** — deterministic extraction (topics/claims/quotes/
    hooks/opportunities) persisted to `content_intelligence`; **best-effort**,
    every evidence segment verified verbatim before writing.
-6. **Generating outputs** (`pct` 82→97) — the requested formats (or all three
+6. **Generating outputs** (`pct` 82→97) — the requested formats (or all five
    defaults) generated in parallel via `generateOutput` (Gemini
    `gemini-3.6-flash`, OpenRouter fallback only on quota). Prompts come from
    `buildSystemPrompt(format, userPrompts)` (custom override > built-in
@@ -306,7 +307,8 @@ Success: `{ "ok": true }`.
 **Auth:** required.
 
 - Output must exist and be owned → `404`.
-- Format must be one of the three LLM formats → `400
+- Format must be one of the registry's LLM formats (`isOutputFormat`, plans
+  module) → `400
   {"error":"This output can't be regenerated."}`.
 - **Budget:** `regeneration_count` must be `< plan.maxRegenerationsPerJob`
   (atomic optimistic update reserves the slot) → `429 REGENERATION_LIMIT_REACHED`.
@@ -329,11 +331,11 @@ Returns the user's custom prompts:
 ```json
 {
   "brand_voice": "…",                       // global voice note ("" = none)
-  "overrides": { "linkedin_post": "…", "newsletter": "", "shortform_script": "" }
+  "overrides": { "linkedin_post": "…", "newsletter": "", "shortform_script": "", "thread": "", "carousel": "" }
 }
 ```
 
-`PROMPT_KEYS` = `["linkedin_post", "newsletter", "shortform_script", "brand_voice"]`.
+`PROMPT_KEYS` = `["linkedin_post", "newsletter", "shortform_script", "thread", "carousel", "brand_voice"]`.
 Blank values mean the built-in default applies.
 
 ### `POST /api/prompts`
@@ -1073,7 +1075,7 @@ every user-owned table has per-user RLS (`auth.uid() = user_id`).
 | Table | Purpose | Key notes |
 |---|---|---|
 | `sources` | One input per row | `source_type` `audio\|video\|youtube\|transcript`; `status` `uploaded\|transcribing\|transcribed\|generating\|done\|failed`; `storage_path` for files, `source_url` for YouTube/URLs; `content_hash` dedupe |
-| `outputs` | Generated drafts | `format` `linkedin_post\|newsletter\|shortform_script`; `content`; `regeneration_count`; **no client update policy** |
+| `outputs` | Generated drafts | `format` `linkedin_post\|newsletter\|shortform_script\|thread\|carousel`; `content`; `regeneration_count`; **no client update policy** |
 | `jobs` | Async queue | `status` `queued\|running\|done\|failed`; `formats text[]`; `idempotency_key`; `refunded`; `attempt` |
 | `transcripts` | Canonical transcript per source | `unique (source_id)`; `provider` `assemblyai\|youtube_captions\|transcript_file` |
 | `user_prompts` | Prompt overrides + brand voice | PK `(user_id, format)` |

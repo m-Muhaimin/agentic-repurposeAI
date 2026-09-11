@@ -12,11 +12,11 @@ The freeze covers the runtime contracts below. It does NOT prevent bug fixes, P2
 - Any new output format must be added to `lib/output-registry/definitions.ts` FIRST. The registry drives `lib/recommendations` (evidence gates, scoring) and the UI-facing labels/descriptions.
 
 ### 1a. The legacy typed façade (`lib/ai/prompts.ts`)
-- `OutputFormat` is a hard-coded union: `"linkedin_post" | "newsletter" | "shortform_script"`.
-- `FORMATS` is `outputRegistry.formats()` filtered to those three ids; `PROMPTS[format]` mirrors the registry's `systemPrompt`.
-- The façade intentionally does NOT surface new registry outputs into legacy generation/billing/agent code.
+- `OutputFormat` is a hard-coded union: `"linkedin_post" | "newsletter" | "shortform_script" | "thread" | "carousel"`.
+- `FORMATS` is `outputRegistry.formats()` filtered to those five ids; `PROMPTS[format]` mirrors the registry's `systemPrompt`.
+- Widenings of the union (and the parallel copies in `types/agent.ts`, `types/supabase.ts`, `lib/billing/plans.ts`) are deliberate, one-time, and must stay in lock-step with the registry — never add an id to the union without also registering it in `definitions.ts` and adding a `user_prompts` override key.
 - **Freeze:** the façade and the registry must stay in agreement. The regression tests in `lib/output-registry/registry.test.ts` ("legacy façade ↔ registry alignment") pin this.
-- **Known limitation (documented):** adding a new format to the registry will NOT make it appear in the legacy typed generation lists unless the `OutputFormat` union and its records are widened deliberately. This is a design boundary, not a bug. Do not "fix" it by leaking arbitrary registry ids into the union — that would silently change generation behavior.
+- **Known limitation (documented):** adding a new format ONLY to the registry will NOT make it appear in the legacy typed generation lists unless the `OutputFormat` union and its records are widened deliberately. This is a design boundary, not a bug. Do not "fix" it by leaking arbitrary registry ids into the union — that would silently change generation behavior.
 
 ## 2. AuthZ model: server-side identity + row-level RLS ownership
 

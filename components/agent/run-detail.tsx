@@ -122,7 +122,9 @@ function runIsStalled(run: AgentRunRow): boolean {
 const FORMAT_LABEL: Record<string, string> = {
   linkedin_post: "LinkedIn post",
   newsletter: "Newsletter",
-  shortform_script: "Short-form script"
+  shortform_script: "Short-form script",
+  thread: "Thread",
+  carousel: "Carousel"
 };
 
 export default function RunDetail({
