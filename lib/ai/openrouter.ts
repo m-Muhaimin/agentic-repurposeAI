@@ -62,6 +62,11 @@ export async function generateOutputViaFallbackLlm(
       headers,
       body: JSON.stringify({
         model,
+        // Explicitly disable streaming. Some OpenAI-compatible gateways (e.g. the
+        // 9router host) default to SSE delivery when `stream` is omitted, which
+        // forces the parser below down its slow SSE path. We only need the final
+        // answer, so ask for a single plain JSON response up front.
+        stream: false,
         messages: [
           { role: "system", content: systemPrompt ?? PROMPTS[format] },
           { role: "user", content: `Transcript:\n\n${transcript.slice(0, 15000)}` }
@@ -81,8 +86,35 @@ export async function generateOutputViaFallbackLlm(
     throw new Error(`LLM fallback request failed (${res.status}): ${await res.text()}`);
   }
 
-  const data = await res.json();
+  const raw = await res.text();
+  const data = parseCompletionResponse(raw);
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("LLM fallback returned no content.");
   return content as string;
+}
+
+/**
+ * Parse an OpenAI-compatible chat completion body. Normally a plain JSON object;
+ * some gateways stream SSE (`data: {...}` lines) even with `stream: false` — in
+ * that case the final non-`[DONE]` chunk carries the content.
+ */
+function parseCompletionResponse(raw: string): { choices?: Array<{ message?: { content?: string } }> } {
+  if (!raw.trim().startsWith("data:")) return JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> };
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("data:") && !l.includes("[DONE]"));
+  if (lines.length === 0) throw new Error("LLM fallback streamed an empty response.");
+  const last = JSON.parse(lines[lines.length - 1].replace(/^data:\s*/, "")) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  // The last chunk may only carry reasoning; scan back for a chunk with content.
+  for (const line of [...lines].reverse()) {
+    const chunk = JSON.parse(line.replace(/^data:\s*/, "")) as {
+      choices?: Array<{ delta?: { content?: string; reasoning_content?: string }; message?: { content?: string } }>;
+    };
+    const content = chunk.choices?.[0]?.message?.content ?? chunk.choices?.[0]?.delta?.content;
+    if (content) return { choices: [{ message: { content } }] };
+  }
+  return last;
 }

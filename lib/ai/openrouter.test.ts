@@ -70,7 +70,7 @@ describe("generateOutputViaFallbackLlm", () => {
     const fakeContent = "Hello from fallback";
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ choices: [{ message: { content: fakeContent } }] })
+      text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: fakeContent } }] }))
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -86,6 +86,7 @@ describe("generateOutputViaFallbackLlm", () => {
 
     const body = JSON.parse(opts.body);
     expect(body.model).toBe("ollama/gpt-oss:120b");
+    expect(body.stream).toBe(false);
     expect(body.messages).toHaveLength(2);
     expect(body.messages[0]).toMatchObject({ role: "system", content: "system-prompt" });
     expect(body.messages[1].content).toContain("Test transcript");
@@ -96,7 +97,7 @@ describe("generateOutputViaFallbackLlm", () => {
     vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ choices: [{ message: { content: "ok" } }] })
+      text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: "ok" } }] }))
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -111,11 +112,6 @@ describe("generateOutputViaFallbackLlm", () => {
   it("throws on non-OK status", async () => {
     vi.stubEnv("LLM_API_KEY", "sk-test");
     vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
-    vi.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-      text: () => Promise.resolve("unavailable")
-    });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, text: () => "unavailable" }));
 
     await expect(
@@ -128,8 +124,44 @@ describe("generateOutputViaFallbackLlm", () => {
     vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ choices: [] })
+      text: () => Promise.resolve(JSON.stringify({ choices: [] }))
     }));
+
+    await expect(
+      generateOutputViaFallbackLlm("linkedin_post", "data")
+    ).rejects.toThrow(/no content/);
+  });
+
+  it("tolerates SSE-streamed responses even when stream:false is ignored", async () => {
+    vi.stubEnv("LLM_API_KEY", "sk-test");
+    vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
+    const chunks = [
+      `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: "thinking hard" } }] })}`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "Final" } }] })}`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}`,
+      "data: [DONE]"
+    ].join("\n\n");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: () => chunks }));
+
+    const result = await generateOutputViaFallbackLlm("linkedin_post", "data");
+    expect(result).toBe("Final");
+  });
+
+  it("returns content when the SSE final chunk carries a message (non-delta shape)", async () => {
+    vi.stubEnv("LLM_API_KEY", "sk-test");
+    vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
+    const chunks = `data: ${JSON.stringify({ choices: [{ message: { content: "via-message" } }] })}\n\ndata: [DONE]`;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: () => chunks }));
+
+    const result = await generateOutputViaFallbackLlm("linkedin_post", "data");
+    expect(result).toBe("via-message");
+  });
+
+  it("throws on an SSE response with no content chunk", async () => {
+    vi.stubEnv("LLM_API_KEY", "sk-test");
+    vi.stubEnv("LLM_BASE_URL", "https://example.com/v1");
+    const chunks = `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: "still thinking" } }] })}\n\ndata: [DONE]`;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: () => chunks }));
 
     await expect(
       generateOutputViaFallbackLlm("linkedin_post", "data")
