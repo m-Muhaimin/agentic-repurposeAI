@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PROMPTS, type OutputFormat } from "./prompts";
-import { generateOutputViaOpenRouter } from "./openrouter";
+import { generateOutputViaFallbackLlm, resolveFallbackEndpoint } from "./openrouter";
 import { retryOnOverload } from "./retry";
 import { log } from "@/lib/logger";
 
@@ -79,14 +79,14 @@ export async function generateOutput(
 
     log.warn("generate.gemini_quota", { format, duration_ms: Date.now() - startedAt });
 
-    if (!process.env.OPENROUTER_API_KEY) {
+    if (!resolveFallbackEndpoint().apiKey) {
       throw new Error(
-        "Gemini hit its quota/rate limit and OPENROUTER_API_KEY is not set, so there's no fallback available."
+        "Gemini hit its quota/rate limit and no fallback LLM key is configured (set LLM_API_KEY or OPENROUTER_API_KEY)."
       );
     }
 
     try {
-      const content = await generateOutputViaOpenRouter(format, transcript, systemPrompt);
+      const content = await generateOutputViaFallbackLlm(format, transcript, systemPrompt);
       log.info("generate.openrouter_ok", { format, duration_ms: Date.now() - startedAt });
       // OpenRouter returns content only — token counts not available from the
       // fallback path. Mark as unknown (0) rather than fabricating.

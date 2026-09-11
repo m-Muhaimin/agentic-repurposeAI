@@ -20,6 +20,10 @@ Next.js 14 (App Router) + Supabase + Gemini: intake on `/upload` is file upload 
 Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`. Plus:
 - `ASSEMBLYAI_API_KEY` — transcription, file-upload path only.
 - `OPENROUTER_API_KEY` (+ optional `OPENROUTER_MODEL`) — fallback model when Gemini hits quota.
+  Overridable via the generic env vars `LLM_BASE_URL` (default `https://openrouter.ai/api/v1`),
+  `LLM_MODEL`, `LLM_API_KEY` — point these at any OpenAI-compatible endpoint (e.g.
+  `https://9router-mh9b.srv1010179.hstgr.cloud/v1` / `ollama/gpt-oss:120b`) to use a different
+  fallback provider.
 - `NEXT_PUBLIC_SITE_URL` — sent as OpenRouter referer.
 - `YTDLP_JS_RUNTIME`, `YTDLP_DOWNLOAD_TIMEOUT_MS` — yt-dlp tuning for the archived legacy YouTube fallback (`lib/ingestion/providers/ytdlp.ts`, see YouTube section). Cookie files are no longer supported (extension retired).
 - `MAX_SOURCE_FILE_MB` (default 200), `MAX_INPUT_SECONDS` (default 7200), `REPURPOSE_RATE_LIMIT_PER_MIN` (default 10) — abuse-prevention caps, shared via `lib/limits.ts`. (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` may linger in `.env.local` from early days; never read by code — safe to remove.)

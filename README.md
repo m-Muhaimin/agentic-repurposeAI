@@ -23,7 +23,9 @@ human-gates them, then generates and evaluates drafts.
 ## 2. Get your other keys
 - **Gemini**: aistudio.google.com/app/apikey → `GEMINI_API_KEY`
 - **AssemblyAI**: assemblyai.com → `ASSEMBLYAI_API_KEY` (file-upload path only)
-- **OpenRouter** (optional): fallback model when Gemini hits its quota → `OPENROUTER_API_KEY`
+- **OpenRouter** (optional): fallback model when Gemini hits its quota → `OPENROUTER_API_KEY`.
+  The fallback endpoint is configurable — set `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` to use any
+  OpenAI-compatible gateway instead (defaults to OpenRouter; existing envs are unchanged).
 - **Google Cloud OAuth** (optional, for "Connect YouTube"): web-client creds → `GOOGLE_CLIENT_ID/SECRET`,
   add the `/api/integrations/youtube/callback` redirect URI, and set a stable `YOUTUBE_TOKEN_ENCRYPTION_KEY`
   (must be identical in every environment).

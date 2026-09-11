@@ -92,7 +92,7 @@ verified by reading the code, not assumed.
 ### Env inventory (names verified, values not committed)
 `.env.example` covers: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `ASSEMBLYAI_API_KEY`, `OPENROUTER_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_TOKEN_ENCRYPTION_KEY`, optional `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL`.
 Runtime `.env`/`.env.local` both gitignored; `.env.local` additionally carries `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (set but not referenced by any code — dead env var, clean up in P1/P28).
-Env-tunable limits (not in `.env.example` yet): `MAX_SOURCE_FILE_MB`, `MAX_INPUT_SECONDS`, `REPURPOSE_RATE_LIMIT_PER_MIN`, `OPENROUTER_MODEL`, `YTDLP_JS_RUNTIME`, `YTDLP_DOWNLOAD_TIMEOUT_MS`, `LOG_LEVEL`, `LOG_WEBHOOK_URL`.
+Env-tunable limits (not in `.env.example` yet): `MAX_SOURCE_FILE_MB`, `MAX_INPUT_SECONDS`, `REPURPOSE_RATE_LIMIT_PER_MIN`, `OPENROUTER_MODEL`, `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` (fallback endpoint override), `YTDLP_JS_RUNTIME`, `YTDLP_DOWNLOAD_TIMEOUT_MS`, `LOG_LEVEL`, `LOG_WEBHOOK_URL`.
 
 ### Schema
 Single hand-rolled `supabase/schema.sql` (idempotent `create table if not exists`, RLS on all tables, storage policies, `handle_new_user()` security-definer trigger). **No `supabase/migrations/` directory**; no `npm run db:push`; `npm run db:types` requires a live `$SUPABASE_PROJECT_ID`. `types/supabase.ts` is generated but **handwritten/placeholder** (several structural row types mirror tables manually, e.g. `YoutubeConnectionRow`).
