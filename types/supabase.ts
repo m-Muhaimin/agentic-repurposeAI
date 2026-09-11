@@ -71,6 +71,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["drive_connections"]["Row"]>;
         Relationships: [];
       };
+      notifications: {
+        Row: { id: string; user_id: string; type: string; title: string; body: string; severity: "info"|"success"|"warning"|"error"; entity_type: string | null; entity_id: string | null; action_url: string | null; metadata: unknown; dedupe_key: string | null; expires_at: string | null; read_at: string | null; created_at: string };
+        Insert: Partial<Database["public"]["Tables"]["notifications"]["Row"]> & { user_id: string; type: string; title: string; body: string };
+        Update: Partial<Database["public"]["Tables"]["notifications"]["Row"]>;
+        Relationships: [];
+      };
       profiles: {
         Row: { user_id: string; plan: "beta"|"creator"|"pro"|"studio"; plan_status: "active"|"cancelled"; created_at: string; updated_at: string };
         Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { user_id: string };

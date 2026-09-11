@@ -31,6 +31,7 @@ import {
   type BufferChannelMCP
 } from "@/lib/buffer/mcp";
 import { platformToBufferService } from "@/lib/buffer/client";
+import { notifyPublishChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
@@ -207,7 +208,7 @@ export async function scheduleRunOutputs(
       });
       if (!post.id) throw new BufferMcpError("Buffer accepted the post but returned no ID.", "buffer_error");
 
-      const { error: jobError } = await service.from("v4_distribution_jobs").insert({
+      const { data: jobRow, error: jobError } = await service.from("v4_distribution_jobs").insert({
         run_id: ctx.runId,
         user_id: ctx.userId,
         output_id: target.outputId,
@@ -217,8 +218,14 @@ export async function scheduleRunOutputs(
         published_at: null,
         external_id: post.id,
         error_message: null
-      });
+      }).select("id").maybeSingle();
       if (jobError) throw new Error(`Could not record distribution job: ${jobError.message}`);
+
+      // Notify AFTER the durable scheduled insert lands (persist-first).
+      // Best-effort — the builder never throws.
+      if (jobRow?.id) {
+        await notifyPublishChanged(ctx.userId, { id: jobRow.id }, "scheduled", { channel: target.platform });
+      }
 
       await recordDistributionStep(
         service,
@@ -232,14 +239,19 @@ export async function scheduleRunOutputs(
     } catch (err) {
       failed += 1;
       const message = errorMessage(err);
-      await service.from("v4_distribution_jobs").insert({
+      const { data: failedJob } = await service.from("v4_distribution_jobs").insert({
         run_id: ctx.runId,
         user_id: ctx.userId,
         output_id: target.outputId,
         platform: target.platform,
         status: "failed",
         error_message: message
-      });
+      }).select("id").maybeSingle();
+      // Notify AFTER the durable failed insert lands (persist-first).
+      // Best-effort — the builder never throws.
+      if (failedJob?.id) {
+        await notifyPublishChanged(ctx.userId, { id: failedJob.id }, "failed", { channel: target.platform });
+      }
       await recordDistributionStep(
         service,
         ctx,

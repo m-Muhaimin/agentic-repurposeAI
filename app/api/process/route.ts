@@ -12,6 +12,7 @@ import { resolvePlan } from "@/lib/billing/entitlements";
 import { maxInputSecondsFor, currentWindow } from "@/lib/billing/usage";
 import { recordUsageEvent } from "@/lib/billing/ledger";
 import { track, EVENTS } from "@/lib/analytics/events";
+import { notifySourceChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 // The formats this job generates come from the Phase-5 Output Registry (a
@@ -143,6 +144,12 @@ export async function POST(request: Request) {
   }
 
   const sourceId = claimed.source_id;
+
+  // Notify AFTER the durable claim write (queued→running) lands
+  // (persist-first). Re-claims of a stale run re-fire this — the builder's
+  // per-state dedupe key makes that a no-op. Best-effort.
+  await notifySourceChanged(userId, { id: sourceId }, "processing");
+
   const requestedFormats = Array.isArray(claimed.formats)
     ? (claimed.formats.filter((f) => FORMATS.includes(f as OutputFormat)) as OutputFormat[])
     : [];
@@ -292,6 +299,8 @@ export async function POST(request: Request) {
       );
 
       await service.from("sources").update({ status: "done" }).eq("id", sourceId);
+      // Notify AFTER the durable source→done write lands (persist-first).
+      await notifySourceChanged(userId, { id: sourceId }, "ready");
       await service
         .from("jobs")
         .update({ status: "done", finished_at: new Date().toISOString() })
@@ -323,6 +332,9 @@ export async function POST(request: Request) {
       const message = err instanceof Error ? err.message : "Unknown error";
 
       await service.from("sources").update({ status: "failed", error_message: message }).eq("id", sourceId);
+
+      // Notify AFTER the durable source→failed write lands (persist-first).
+      await notifySourceChanged(userId, { id: sourceId }, "failed");
 
       // Refund platform-side failures (transcription/generation errors) so the
       // user's monthly budget is theirs again. Invalid input (too long) is

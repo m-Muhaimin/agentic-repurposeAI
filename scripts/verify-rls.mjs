@@ -3,8 +3,12 @@
 // Creates two throwaway users (A and B), has A insert a source + output, then
 // asserts B can neither read, update, delete, nor forge-own A's rows — proving
 // the `sources`/`outputs` RLS policies hold across accounts, plus that deleting
-// a user cascades to their rows. All created users/rows are cleaned up
-// regardless of pass/fail.
+// a user cascades to their rows. Also covers the notifications table (Phase 2):
+// service-role-only writes, per-user SELECT policy with no client
+// insert/update/delete, and the read-state security-definer RPCs
+// (notifications_mark_read / notifications_mark_all_read) as the only
+// client-permitted mutations. All created users/rows are cleaned up regardless
+// of pass/fail.
 //
 // Run: npm run verify:rls   (reads .env.local for Supabase URL/anon/service keys)
 
@@ -272,6 +276,91 @@ async function main() {
     subEv,
     (d) => Array.isArray(d) && d.length === 0
   );
+
+  console.log("Notifications (Phase 2 — service-role write, per-user read, RPC-only mutations):");
+  // Admin (service role) is the ONLY writer; clients have no insert policy.
+  const notifIns = await admin
+    .from("notifications")
+    .insert({
+      user_id: aId,
+      type: "rls_test",
+      title: "rls-test notification",
+      body: "notification body",
+      dedupe_key: `rls-${aId}-${ts}`
+    })
+    .select()
+    .single();
+  maybeCheck(
+    "admin (service role) can insert a notification",
+    notifIns,
+    (d) => Boolean(d?.id)
+  );
+  const notifId = notifIns.data?.id;
+  if (notifId) {
+    const readOwn = await a.from("notifications").select("*").eq("id", notifId);
+    maybeCheck(
+      "A can read their own notification",
+      readOwn,
+      (d) => Array.isArray(d) && d.length === 1
+    );
+    const readByB = await b.from("notifications").select("*").eq("id", notifId);
+    maybeCheck(
+      "B cannot read A's notification",
+      readByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const updByB = await b.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", notifId).select();
+    maybeCheck(
+      "B cannot update A's notification",
+      updByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const forgeNotif = await b
+      .from("notifications")
+      .insert({ user_id: aId, type: "rls_test", title: "forged", body: "forged" })
+      .select()
+      .single();
+    maybeBlockedWrite(
+      "B cannot insert a notification owned by A (no insert policy)",
+      forgeNotif
+    );
+    const delByB = await b.from("notifications").delete().eq("id", notifId).select();
+    maybeCheck(
+      "B cannot delete A's notification",
+      delByB,
+      (d) => Array.isArray(d) && d.length === 0
+    );
+    const markByB = await b.rpc("notifications_mark_read", { p_id: notifId });
+    maybeCheck(
+      "B cannot mark A's notification read (RPC returns false)",
+      markByB,
+      (d) => d === false
+    );
+    const afterB = await a.from("notifications").select("read_at").eq("id", notifId).single();
+    maybeCheck(
+      "A's notification still unread after B's RPC attempt",
+      afterB,
+      (d) => d?.read_at === null
+    );
+    const markByA = await a.rpc("notifications_mark_read", { p_id: notifId });
+    maybeCheck(
+      "A can mark their own notification read (RPC returns true)",
+      markByA,
+      (d) => d === true
+    );
+    const markAllByA = await a.rpc("notifications_mark_all_read");
+    maybeCheck(
+      "A can mark all notifications read (RPC returns count)",
+      markAllByA,
+      (d) => typeof d === "number" && d >= 0
+    );
+    // Cleanup: admin removes the notification row (user deletion would cascade
+    // via FK anyway, but the row is service-role-owned so remove it explicitly).
+    const notifCleanup = await admin.from("notifications").delete().eq("id", notifId);
+    if (notifCleanup.error) {
+      console.warn(`  cleanup: could not delete notification ${notifId}: ${notifCleanup.error.message}`);
+    }
+  }
 
   console.log("Cleanup cascade:");
   const delA = await admin.auth.admin.deleteUser(aId);

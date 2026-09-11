@@ -8,6 +8,7 @@ import {
   NOT_CONNECTED_MESSAGE
 } from "@/lib/agent/publish";
 import { distributionTool } from "@/lib/agent/tools/distribution";
+import { notifyPublishChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/queue/publish — the manual approval step of the Publish queue
@@ -158,6 +159,12 @@ export async function POST(request: Request) {
   if (insertErr) {
     log.error("agent.queue_insert_failed", new Error(insertErr.message), { user_id: user.id, output_id: outputId, platform });
     return NextResponse.json({ error: "Failed to record the queued job." }, { status: 500 });
+  }
+
+  // Notify AFTER the durable scheduled insert lands (persist-first) — the
+  // human queued this job. Best-effort — the builder never throws.
+  if (job?.id) {
+    await notifyPublishChanged(user.id, { id: job.id }, "scheduled", { channel: platform });
   }
 
   log.info("agent.queue_recorded", {

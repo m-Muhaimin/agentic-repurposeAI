@@ -189,6 +189,7 @@ converge). RLS grammar everywhere: `auth.uid() = user_id`.
 | `subscriptions` / `subscription_events` | billing contract | service-role writes; user reads own row; unique user_id / provider_subscription_id |
 | `youtube_connections` | OAuth link | tokens AES-GCM encrypted (`YOUTUBE_TOKEN_ENCRYPTION_KEY`); unique user_id |
 | `buffer_connections` | Stage-4 BYOB | tokens AES-256-GCM (`BUFFER_TOKEN_ENCRYPTION_KEY`); unique user_id |
+| `notifications` | in-app notification rows | **SELECT-only RLS** (own rows); service-role writes only; mark-read security-definer RPCs (`notifications_mark_read(uuid)→boolean`, `notifications_mark_all_read()→integer`); table-level `unique (user_id, dedupe_key)` |
 | `v4_agent_runs` | durable run | `mode`/`status` enums; `plan` jsonb; `transcript_snapshot`; token/cost counters; `output_ids`; P2 budget columns `max_steps(1-200)/max_cost_units(>0)/max_runtime_s(30-14400)` + `heartbeat_at` |
 | `v4_agent_steps` | append-only step/audit log | `kind`/`status` enums; `input`/`output` jsonb; `retry_count` |
 | `v4_content_ideas` | plan angles | `quotes` text[] (verbatim evidence); `evaluation` jsonb (P3 score); `approved` |
@@ -226,8 +227,9 @@ schema.
 - **Layout**: `app-shell.tsx` (Workspace group nav incl. `/agent`),
   `.workspace` container (1440 px) for app pages vs `.container` (1128/1266 px)
   for marketing. `middleware.ts` protects `/dashboard /upload /repurpose
-  /branding /connections /library /agent /settings /content /reset-password`
-  (+ account delete/export).
+  /branding /connections /library /agent /publish /content /settings
+  /notifications /reset-password` (+ account delete/export +
+  `/api/notifications`).
 - **App pages**: dashboard (4s polling + optional Realtime), `/upload` (3 input
   modes), `/library`, `/repurpose/[id]` (output editor w/ Preview/Edit +
   regenerate + copy), `/branding`, `/connections`, `/settings/usage`, `/agent`.
@@ -271,6 +273,72 @@ schema.
   scaffolder wizard on this box). Typecheck `npx tsc --noEmit` needs
   `.next/types` (run `npm run build` first if `.next` is stale/missing).
 - **CI**: GitHub Actions typecheck → test → build (secrets-gated live verifier).
+
+---
+
+## 7. Notification system (in-app)
+
+Shipped 2026-09-12 via `supabase/migrations/20260912000001_notifications.sql`
+(idempotent, same `if not exists` pattern as the other migrations). Full design
++ plan-vs-implementation reconciliation: `docs/NOTIFICATION_ARCHITECTURE.md`
+(status: **implemented**; §13.2 itemises every planned-vs-shipped delta).
+
+- **Table `notifications`** — per-user RLS grammar, **SELECT-only** (no write
+  policies, mirroring `outputs`): `id`, `user_id`, `type` (taxonomy
+  allowlist), `title`, `body NOT NULL`, `severity` inline check, `entity_type/
+  id`, `action_url` (internal-prefix allowlist only), `metadata` jsonb
+  (non-PII, nullable no default), `dedupe_key` with table-level per-user
+  `unique (user_id, dedupe_key)`, `expires_at`, `read_at`, `created_at`.
+  Indexes:
+  `(user_id, created_at desc)` + partial `(user_id) where read_at is null`.
+- **Single writer**: `lib/notifications/create.ts` (service client,
+  best-effort — never throws into the domain path; same posture as
+  `lib/analytics/events.ts::track`). Dedupe via
+  `.upsert({ onConflict: "user_id,dedupe_key", ignoreDuplicates: true }).select().single()`
+  — **postgrest-js 2.115.0 dropped the chainable `.onConflict()` API** — with
+  `PGRST116` → re-select as the dedupe-hit signal. Typed per-domain builders in
+  `lib/notifications/events.ts`; validation/sanitize caps + `isSafeActionUrl`
+  in `lib/notifications/types.ts` (title ≤ 160, body ≤ 1000, metadata ≤ 2048
+  bytes, dedupe_key ≤ 255).
+- **Read-state**: security-definer RPCs with ownership checked in-body —
+  `notifications_mark_read(p_id uuid) → boolean` (false → route 404),
+  `notifications_mark_all_read() → integer`; `revoke … from public; grant …
+  to authenticated`. Type discipline: `notifications` Row/Insert/Update added
+  by hand to `types/supabase.ts`; the RPCs stay out of the `Functions` map —
+  routes cast just the `rpc` surface locally.
+- **Routes** (`app/api/notifications/`): `GET /api/notifications` (keyset
+  cursor `${encodeURIComponent(createdAt)}|${id}`, `unreadCount` on every page,
+  **fails open** `{ notifications: [], nextCursor: null, unreadCount: 0 }` when
+  the table is missing), `POST /api/notifications/[id]/read` (400 empty id;
+  **non-UUID id → 404 pre-RPC**, indistinguishable from not-owned; 404 when the
+  RPC returns false — missing-vs-not-owned deliberately indistinguishable,
+  **503 fail-closed** with a migration hint when the RPC is absent),
+  `POST /api/notifications/read-all` → `{ ok, marked }`. Middleware
+  protects `/notifications` + `/api/notifications` (defense-in-depth; each
+  route still self-guards).
+- **Emit sites** (all after the domain write commits, fire-and-forget; see
+  architecture doc §13 for the full file:line inventory): worker
+  (`source.processing/ready/failed` — `app/api/process/route.ts`), enqueue
+  (`usage.limit_near/reached` at 80/100 % crossings only —
+  `app/api/repurpose/route.ts`), regenerate (`content.generated` — route only,
+  the worker does not emit), orchestrator + approve/cancel routes
+  (`agent.started/awaiting_approval/completed/failed/paused` on `cancelled`),
+  distribution/schedule/queue-publish (`publish.scheduled/published/failed`),
+  billing webhook route (`subscription.updated`, `payment.failed` — spec
+  computed in `lib/billing/paddle.ts`, emitted fail-open by
+  `app/api/billing/webhook/route.ts`; inert until `PADDLE_API_KEY`/
+  `PADDLE_WEBHOOK_SECRET` exist). Reserved (types valid,
+  nothing wired): `content.validated`, `content.review_required`,
+  `content.approved`, `publish.started`, `system.*`.
+- **UI**: `components/notifications/` — `use-notifications.ts` (Realtime
+  INSERT-only on `notifications-${userId}` + 30 s poll + `visibilitychange`
+  refresh), `notification-bell.tsx` (mounted in `components/app-shell.tsx`),
+  `notifications-page.tsx` (`app/(app)/notifications/page.tsx`), `merge.ts`
+  id-based reconcile (Map + dual-key sort, no duplicate rows), `relative-time.ts`.
+- **Tests**: `lib/notifications/create.test.ts` + `events.test.ts`,
+  `app/api/notifications/route.test.ts` / `[id]/read/route.test.ts` /
+  `read-all/route.test.ts`, `components/notifications/merge.test.ts` +
+  `relative-time.test.ts` — all co-located, matching repo style.
 
 ---
 

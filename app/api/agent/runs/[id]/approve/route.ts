@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { recordAngleDecision } from "@/lib/agent/memory";
+import { notifyAgentRunChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/runs/[id]/approve
@@ -127,6 +128,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     log.error("agent.approve_update_failed", new Error(updateErr.message), { run_id: id });
     return NextResponse.json({ error: "Failed to record approval." }, { status: 500 });
   }
+
+  // Notify AFTER the durable status write (persist-first). This is the same
+  // transition the orchestrator automates: approved → `executing` (agent.started,
+  // deduped per run) and reject-all → `cancelled` (agent.paused, same as the
+  // cancel route). Best-effort — the builder never throws.
+  await notifyAgentRunChanged(user.id, { id, status: nextStatus });
 
   log.info("agent.approval_recorded", {
     run_id: id,

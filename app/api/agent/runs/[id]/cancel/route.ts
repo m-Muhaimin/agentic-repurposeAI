@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { notifyAgentRunChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/runs/[id]/cancel
@@ -46,6 +47,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     log.error("agent.cancel_failed", new Error(cancelError.message), { run_id: id, user_id: user.id });
     return NextResponse.json({ error: "Failed to cancel the run." }, { status: 500 });
   }
+
+  // Notify AFTER the durable cancelled write (persist-first). Best-effort —
+  // the builder never throws.
+  await notifyAgentRunChanged(user.id, { id, status: "cancelled" });
 
   log.info("agent.cancelled", {
     run_id: id,

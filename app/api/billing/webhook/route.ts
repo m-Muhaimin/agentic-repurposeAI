@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { notifyBillingEvent } from "@/lib/notifications";
+import { log } from "@/lib/logger";
 import {
   applyPaddleEvent,
   getPaddleConfig,
@@ -30,7 +32,24 @@ export async function POST(req: Request) {
   try {
     // Writes are idempotent (upsert keyed on provider_subscription_id) so
     // Paddle retries are safe; always ack with 200 once applied.
-    await applyPaddleEvent(createServiceClient(), event);
+    const result = await applyPaddleEvent(createServiceClient(), event);
+
+    // Emit the billing notification SERVER-SIDE, fail-open: paddle.ts only
+    // computes the spec (it must stay client-safe), and a notification hiccup
+    // must never fail the webhook ack — this block never reaches the 500 below.
+    if (result.notification) {
+      try {
+        await notifyBillingEvent(result.notification.userId, result.notification.type, {
+          planLabel: result.notification.planLabel
+        });
+      } catch (err) {
+        log.warn("billing.notification_failed", {
+          user_id: result.notification.userId,
+          event_id: event.event_id,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
   } catch (err) {
     console.error("[billing/webhook]", event.event_id, err);
     return NextResponse.json({ error: "Webhook handling failed" }, { status: 500 });

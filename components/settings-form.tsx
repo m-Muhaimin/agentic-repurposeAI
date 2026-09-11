@@ -98,20 +98,14 @@ export default function SettingsForm({ email, name: initialName }: { email: stri
 
       {/* Preferences */}
       <Card>
-        <CardHeader
-          title="Preferences"
-          description="Optional alerts, coming soon."
-        />
+        <CardHeader title="Preferences" />
         <div className="px-5 py-5">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-theme-divider p-4">
-            <div>
-              <p className="text-sm font-medium text-theme-text-primary">In-app alerts</p>
-              <p className="text-xs text-theme-text-secondary">
-                Notifications when drafts are ready or processing fails — we&apos;re building these
-                and they aren&apos;t live yet.
-              </p>
-            </div>
-            <span className="badge bg-neutral-900 text-white shrink-0">Coming soon</span>
+          <div className="rounded-lg border border-theme-divider p-4">
+            <p className="text-sm font-medium text-theme-text-primary">In-app alerts</p>
+            <p className="mt-0.5 text-xs text-theme-text-secondary">
+              Notifications when your content is ready or something needs your attention — check
+              the bell in the top bar.
+            </p>
           </div>
         </div>
       </Card>

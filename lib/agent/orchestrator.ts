@@ -40,6 +40,7 @@ import { intelligenceTool } from "@/lib/agent/tools/intelligence";
 import { sourceTool } from "@/lib/agent/tools/source";
 import { reviewTool } from "@/lib/agent/tools/review";
 import { scheduleRunOutputs } from "@/lib/agent/schedule";
+import { notifyAgentRunChanged } from "@/lib/notifications";
 
 export type Send = (event: string, data: unknown) => void;
 
@@ -322,6 +323,12 @@ async function runPlanning(
     })
     .eq("id", runId);
   if (runError) throw new Error(`Could not persist plan: ${runError.message}`);
+
+  // Notify AFTER the durable park write lands (persist-first). Automate
+  // auto-approval parks straight into `executing` (agent.started, deduped to
+  // once per run); the human path parks at `awaiting_approval`. Best-effort —
+  // the builder never throws.
+  await notifyAgentRunChanged(userId, { id: runId, status: autoApproved ? "executing" : "awaiting_approval" });
 
   // Score every angle with the deterministic P3 rubric (objective, grounded,
   // ranked) and persist the evaluation onto each idea row at ingest time — so
@@ -612,6 +619,7 @@ async function runExecution(
 async function finalizeRun(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string,
+  userId: string,
   outcome: RunOutcome,
   phase: "planning" | "execution"
 ): Promise<void> {
@@ -667,6 +675,15 @@ async function finalizeRun(
   if (error) {
     log.error("agent.finalize_failed", new Error(error.message), { run_id: runId });
   }
+
+  // Notify AFTER the durable terminal write lands (persist-first). `done` is the
+  // completion; `cancelled` (worker observed the cancel flag between steps) and
+  // budget-stop `failed` are the same terminal transitions the cancel route and
+  // permanent-failure path notify — the per-run dedupe key makes any re-emission
+  // a no-op. Best-effort — the builder never throws.
+  const terminalStatus =
+    outcome.reason === null ? "done" : outcome.reason === "cancelled" ? "cancelled" : "failed";
+  await notifyAgentRunChanged(userId, { id: runId, status: terminalStatus });
 }
 
 // ── Public entry point: claim then dispatch. Throws on unrecoverable failure. ─
@@ -737,7 +754,7 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
       }
     }
 
-    await finalizeRun(service, runId, outcome, effectivePhase);
+    await finalizeRun(service, runId, run.user_id, outcome, effectivePhase);
 
     if (outcome.reason === null) {
       send("progress", { stage: "Ready", pct: 100 });
@@ -812,6 +829,10 @@ export async function processAgentRun(runId: string, send: Send): Promise<void> 
         updated_at: new Date().toISOString()
       })
       .eq("id", runId);
+
+    // Notify AFTER the durable failed write (persist-first). The transient path
+    // above keeps the run claimable and is deliberately NOT notified.
+    await notifyAgentRunChanged(run.user_id, { id: runId, status: "failed" });
 
     send("error", { error: message, retryable: false });
     log.error("agent.run_failed", err instanceof Error ? err : new Error(message), {

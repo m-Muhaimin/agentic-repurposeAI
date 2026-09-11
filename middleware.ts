@@ -44,9 +44,11 @@ export async function middleware(request: NextRequest) {
     "/publish",
     "/settings",
     "/content",
+    "/notifications",
     "/reset-password",
     "/api/account/delete",
-    "/api/account/export"
+    "/api/account/export",
+    "/api/notifications"
   ];
   const isProtected = protectedPaths.some((p) => request.nextUrl.pathname.startsWith(p));
 

@@ -7,6 +7,7 @@ import { isOutputFormat } from "@/lib/billing/plans";
 import { resolvePlan } from "@/lib/billing/entitlements";
 import { limitErrorBody } from "@/lib/billing/usage";
 import { track, EVENTS } from "@/lib/analytics/events";
+import { notifyContentGenerated } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
@@ -155,10 +156,16 @@ export async function POST(_request: Request, { params }: { params: { id: string
       if (fallbackError) {
         return NextResponse.json({ error: fallbackError.message }, { status: 500 });
       }
+      // Notify AFTER the durable content write succeeds (persist-first).
+      await notifyContentGenerated(user.id, { id: params.id });
       return NextResponse.json({ content });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Notify AFTER the durable content write succeeds (persist-first). Not fired
+  // on the 429/limit or failure paths.
+  await notifyContentGenerated(user.id, { id: params.id });
 
   return NextResponse.json({ content });
 }

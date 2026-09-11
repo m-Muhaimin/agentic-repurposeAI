@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Logo from "./logo";
 import CreateMenu from "./create-menu";
+import NotificationBell from "./notifications/notification-bell";
 import UserMenu from "./user-menu";
 
 type NavItem = {
@@ -161,6 +162,7 @@ const TOP_BAR_TITLES: Array<[string, string]> = [
   ["/dashboard", "Overview"],
   ["/agent", "Agent"],
   ["/library", "Content library"],
+  ["/notifications", "Notifications"],
   ["/publish", "Publish queue"],
   ["/branding", "Brand & voice"],
   ["/connections", "Channels"],
@@ -308,6 +310,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="lg:hidden">
               <CreateMenu variant="topbar" />
             </div>
+            <NotificationBell />
             <UserMenu />
           </div>
         </header>

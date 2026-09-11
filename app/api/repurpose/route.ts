@@ -5,6 +5,7 @@ import { isOutputFormat } from "@/lib/billing/plans";
 import { ensureProfile } from "@/lib/billing/entitlements";
 import { currentWindow, limitErrorBody } from "@/lib/billing/usage";
 import { track, trackUsageThresholds, EVENTS } from "@/lib/analytics/events";
+import { notifyUsageLimit } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 function normalizeFormats(input: unknown): string[] | null {
@@ -192,6 +193,22 @@ export async function POST(request: Request) {
   const usedAfter = jobs_used;
   const usedBefore = usedAfter - 1;
   await trackUsageThresholds(user.id, plan.id, plan.limits.maxJobsPerMonth ?? 0, usedBefore, usedAfter);
+
+  // Notification crossings — the EXACT same detection math as the analytics
+  // thresholds above (80/100, firing only when a threshold is crossed, once per
+  // month window via the notification dedupe key). Guarded on a finite cap.
+  const limit = plan.limits.maxJobsPerMonth;
+  if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+    const beforePct = Math.floor((usedBefore / limit) * 100);
+    const afterPct = Math.floor((usedAfter / limit) * 100);
+    if (afterPct >= 80 && beforePct < 80) {
+      await notifyUsageLimit(user.id, { percent: 80, limit, used: usedAfter, windowLabel: currentWindow().label });
+    }
+    if (afterPct >= 100 && beforePct < 100) {
+      await notifyUsageLimit(user.id, { percent: 100, limit, used: usedAfter, windowLabel: currentWindow().label });
+    }
+  }
+
   if (usedBefore === 0) {
     await track(EVENTS.FIRST_JOB_STARTED, user.id, { source_id: source.id, formats: selected });
   }

@@ -267,6 +267,7 @@ describe("lib/billing/paddle", () => {
       const result = await applyPaddleEvent(service, subscriptionEvent());
 
       expect(result.handled).toBe(true);
+      expect(result.notification).toEqual({ userId: "user-1", type: "subscription.updated", planLabel: "pro" });
       const subUpsert = calls.find((c) => c.table === "subscriptions" && c.op === "upsert");
       expect(subUpsert?.row).toMatchObject({
         user_id: "user-1",
@@ -290,24 +291,36 @@ describe("lib/billing/paddle", () => {
 
     it("downgrades to beta on cancellation", async () => {
       const { service, calls } = makeServiceMock();
-      await applyPaddleEvent(service, subscriptionEvent({ status: "canceled" }));
+      const result = await applyPaddleEvent(service, subscriptionEvent({ status: "canceled" }));
 
       const profileUpsert = calls.find((c) => c.table === "profiles" && c.op === "upsert");
       expect(profileUpsert?.row).toMatchObject({ plan: "beta", plan_status: "cancelled" });
+      expect(result.notification).toEqual({ userId: "user-1", type: "subscription.updated", planLabel: "pro" });
+    });
+
+    it("notifies a beta downgrade when a canceled event carries no plan", async () => {
+      const { service } = makeServiceMock();
+      const event = subscriptionEvent({ status: "canceled" });
+      event.data.items = []; // no resolvable price → change.planId is null
+      const result = await applyPaddleEvent(service, event);
+      expect(result.handled).toBe(true);
+      expect(result.notification).toEqual({ userId: "user-1", type: "subscription.updated", planLabel: "beta" });
     });
 
     it("flags past_due/paused without dropping the plan", async () => {
       const { service, calls } = makeServiceMock();
-      await applyPaddleEvent(service, subscriptionEvent({ status: "paused" }));
+      const result = await applyPaddleEvent(service, subscriptionEvent({ status: "paused" }));
 
       const profileUpsert = calls.find((c) => c.table === "profiles" && c.op === "upsert");
       expect(profileUpsert?.row).toMatchObject({ plan: "pro", plan_status: "cancelled" });
+      expect(result.notification).toEqual({ userId: "user-1", type: "payment.failed" });
     });
 
     it("is a no-op without a user_id", async () => {
       const { service, calls } = makeServiceMock();
       const result = await applyPaddleEvent(service, subscriptionEvent({ custom_data: null }));
       expect(result.handled).toBe(false);
+      expect(result.notification).toBeUndefined();
       expect(calls).toHaveLength(0);
     });
 
@@ -317,6 +330,7 @@ describe("lib/billing/paddle", () => {
       event.event_type = "payout.created";
       const result = await applyPaddleEvent(service, event);
       expect(result.handled).toBe(false);
+      expect(result.notification).toBeUndefined();
       expect(calls).toHaveLength(0);
     });
 
@@ -329,6 +343,7 @@ describe("lib/billing/paddle", () => {
       });
       const result = await applyPaddleEvent(service, subscriptionEvent());
       expect(result.handled).toBe(true);
+      expect(result.notification).toEqual({ userId: "user-1", type: "subscription.updated", planLabel: "pro" });
     });
 
     it("falls back to inserting the audit row without paddle_event_id pre-migration", async () => {
@@ -346,6 +361,7 @@ describe("lib/billing/paddle", () => {
       });
       const result = await applyPaddleEvent(service, subscriptionEvent());
       expect(result.handled).toBe(true);
+      expect(result.notification).toEqual({ userId: "user-1", type: "subscription.updated", planLabel: "pro" });
       const audits = calls.filter((c) => c.table === "subscription_events");
       expect(audits).toHaveLength(2);
       expect(audits[1].row.paddle_event_id).toBeUndefined();

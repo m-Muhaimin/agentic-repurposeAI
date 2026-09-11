@@ -20,6 +20,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { AgentTool, ToolContext, ToolResult, DistributionPlatform } from "@/types/agent";
 import { getFreshAccessToken } from "@/lib/buffer/connections";
 import { fetchProfiles, platformToBufferService, createUpdate, BufferClientError } from "@/lib/buffer/client";
+import { notifyPublishChanged } from "@/lib/notifications";
 import { log } from "@/lib/logger";
 
 const KNOWN_PLATFORMS: DistributionPlatform[] = [
@@ -220,14 +221,21 @@ async function markJobPublished(
   externalId: string
 ): Promise<void> {
   const now = new Date().toISOString();
-  const { error } = await service
+  const { data, error } = await service
     .from("v4_distribution_jobs")
     .update({ status: "published", published_at: now, updated_at: now, external_id: externalId, error_message: null })
     .eq("user_id", ctx.userId)
     .eq("output_id", outputId)
     .eq("platform", platform)
-    .eq("status", "scheduled");
+    .eq("status", "scheduled")
+    .select("id")
+    .maybeSingle();
   if (error) log.warn("agent.job_published_update_failed", { user_id: ctx.userId, output_id: outputId, platform, message: error.message });
+  // Notify AFTER the durable write lands (persist-first), only when a job row
+  // actually flipped to published. Best-effort — the builder never throws.
+  if (data?.id) {
+    await notifyPublishChanged(ctx.userId, { id: data.id }, "published", { channel: platform });
+  }
 }
 
 // Buffer has ACCEPTED a future-scheduled update: the job is no longer pending
@@ -243,14 +251,21 @@ async function markJobScheduled(
   scheduledAt: string
 ): Promise<void> {
   const now = new Date().toISOString();
-  const { error } = await service
+  const { data, error } = await service
     .from("v4_distribution_jobs")
     .update({ status: "scheduled", scheduled_at: scheduledAt, updated_at: now, external_id: externalId, error_message: null })
     .eq("user_id", ctx.userId)
     .eq("output_id", outputId)
     .eq("platform", platform)
-    .in("status", ["scheduled", "draft"]);
+    .in("status", ["scheduled", "draft"])
+    .select("id")
+    .maybeSingle();
   if (error) log.warn("agent.job_scheduled_update_failed", { user_id: ctx.userId, output_id: outputId, platform, message: error.message });
+  // Notify AFTER the durable write lands (persist-first), only when a job row
+  // actually moved to scheduled. Best-effort — the builder never throws.
+  if (data?.id) {
+    await notifyPublishChanged(ctx.userId, { id: data.id }, "scheduled", { channel: platform });
+  }
 }
 
 async function markJobFailed(
@@ -261,14 +276,21 @@ async function markJobFailed(
   errorMessage: string
 ): Promise<void> {
   const now = new Date().toISOString();
-  const { error } = await service
+  const { data, error } = await service
     .from("v4_distribution_jobs")
     .update({ status: "failed", updated_at: now, error_message: errorMessage })
     .eq("user_id", ctx.userId)
     .eq("output_id", outputId)
     .eq("platform", platform)
-    .in("status", ["scheduled", "draft"]);
+    .in("status", ["scheduled", "draft"])
+    .select("id")
+    .maybeSingle();
   if (error) log.warn("agent.job_failed_update_failed", { user_id: ctx.userId, output_id: outputId, platform, message: error.message });
+  // Notify AFTER the durable write lands (persist-first), only when a job row
+  // actually flipped to failed. Best-effort — the builder never throws.
+  if (data?.id) {
+    await notifyPublishChanged(ctx.userId, { id: data.id }, "failed", { channel: platform });
+  }
 }
 
 // Timeline step — ONLY when a real run backs this call. v4_agent_steps.run_id is

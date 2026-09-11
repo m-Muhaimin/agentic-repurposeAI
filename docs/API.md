@@ -24,6 +24,7 @@ plus the client-side intake flow that calls Supabase directly.
 - [Auth & account](#auth--account)
 - [Recommendations](#recommendations)
 - [Usage & billing](#usage--billing)
+- [Notifications](#notifications)
 - [Analytics events](#analytics-events)
 - [Agentic API](#agentic-api)
 - [YouTube integration](#youtube-integration)
@@ -66,9 +67,10 @@ plus the client-side intake flow that calls Supabase directly.
   confirmation.
 - `middleware.ts` protects these paths (unauthenticated → redirect `/login`):
   `/dashboard`, `/upload`, `/repurpose`, `/branding`, `/connections`,
-  `/library`, `/agent`, `/publish`, `/content`, `/settings`, `/reset-password`,
+  `/library`, `/agent`, `/publish`, `/content`, `/settings`,
+  `/notifications`, `/reset-password`,
   plus the account delete/export APIs (`/api/account/delete`,
-  `/api/account/export`).
+  `/api/account/export`) and `/api/notifications`.
 - Public/unauthed endpoints:
   - `GET /api/auth/callback`
   - `POST /api/billing/webhook` (Paddle signature verified)
@@ -542,6 +544,71 @@ orch_approval_requested  orch_plan_approved  orch_plan_rejected
 orch_execution_started  orch_step_completed  orch_run_completed
 orch_run_failed  orch_run_cancelled
 ```
+
+---
+
+## Notifications
+
+In-app notification rows, **created server-side only** (service-role writer in
+`lib/notifications/`; the browser can read and mark-read, never create/edit/
+delete — there are no write policies on `notifications`). Delivery is Supabase
+Realtime (INSERT changes, RLS-filtered) plus a 30 s poll + `visibilitychange`
+refresh in the UI. Full design, taxonomy, and dedupe semantics:
+`docs/NOTIFICATION_ARCHITECTURE.md` (status: implemented — reconciled 2026-09-12
+after the security re-audit).
+
+### `GET /api/notifications` — list (paginated, unread-counted)
+
+**Auth:** required.
+
+Query parameters:
+
+| param | type | default | notes |
+|---|---|---|---|
+| `limit` | int | 20 | clamped to `[1, 50]` |
+| `cursor` | string | — | opaque keyset `${encodeURIComponent(createdAt)}|${id}` from a previous `nextCursor`; garbage → newest page |
+| `unreadOnly` | bool | false | `"true"` filters to `read_at is null` |
+| `type` | string | — | single taxonomy type (`source.ready`, `agent.started`, …); unknown type → empty list |
+
+Response `200` — rows are camelCase domain records; `nextCursor` is always
+present (`null` = last page):
+
+```json
+{
+  "notifications": [ { "id", "userId", "type", "title", "body", "severity",
+                       "entityType", "entityId", "actionUrl", "metadata",
+                       "dedupeKey", "expiresAt", "readAt", "createdAt" } ],
+  "nextCursor": "… | null",
+  "unreadCount": 3
+}
+```
+
+- `unreadCount` is present on every page (including empty ones).
+- Table missing (migration `20260912000001_notifications.sql` not applied) →
+  fails **open**: `200 { "notifications": [], "nextCursor": null, "unreadCount": 0 }`.
+- `401 {"error":"Not signed in"}`; `500` on DB error.
+
+### `POST /api/notifications/[id]/read` — mark one read
+
+**Auth:** required. Body `{}` (empty body tolerated).
+
+- Empty `id` (after trim) → `400 {"error":"Missing notification id"}`.
+- Non-UUID `id` → `404 {"error":"Notification not found"}` **before** the RPC
+  (same indistinguishable posture as a row the caller doesn't own, so
+  existence is never leaked).
+- Calls security-definer RPC `notifications_mark_read(p_id uuid)` (ownership
+  checked in-body) on the user client. RPC returns `false` (row missing / not
+  owned) → `404 {"error":"Notification not found"}`.
+- Missing RPC → `503` fail-closed with a migration hint
+  (`"Notifications are not available yet — the notifications migration has not
+  been applied."`); other RPC errors → `500`.
+- Success → `200 {"ok": true}`.
+
+### `POST /api/notifications/read-all` — mark all read
+
+**Auth:** required. Body `{}`. Calls `notifications_mark_all_read()` (returns
+the integer row count). Success → `200 {"ok": true, "marked": 3 | null}`; same
+503/500 paths as above.
 
 ---
 
@@ -1082,6 +1149,7 @@ every user-owned table has per-user RLS (`auth.uid() = user_id`).
 | `youtube_connections` | YouTube OAuth | `unique (user_id)`; tokens AES-GCM encrypted |
 | `drive_connections` | Google Drive OAuth | `unique (user_id)`; tokens AES-GCM encrypted (same key as YouTube) |
 | `buffer_connections` | Buffer OAuth + MCP key | `unique (user_id)`; tokens + `api_key` AES-GCM encrypted |
+| `notifications` | In-app notification rows | **SELECT-only RLS** (own rows); service-role writes only; mark-read via security-definer RPCs `notifications_mark_read(uuid)→boolean` / `notifications_mark_all_read()→integer`; `unique (user_id, dedupe_key)` |
 | `content_intelligence` | Grounded analysis per source | `unique (source_id)`; `intelligence jsonb` + `provenance` |
 | `profiles` | Billing plan | **service-role write only**, read-own only |
 | `events` | Analytics ledger | RLS on, **no policies** (service-role write) |

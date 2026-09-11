@@ -277,7 +277,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function applyPaddleEvent(
   service: SupabaseClient,
   event: PaddleWebhookEvent
-): Promise<{ handled: boolean; reason?: string }> {
+): Promise<{
+  handled: boolean;
+  reason?: string;
+  // Notification-ON-ACKNOWLEDGEMENT data: the spec of what to emit is computed
+  // here (pure data), but EMISSION happens in the server-only caller (the
+  // webhook route) after this returns — paddle.ts must stay client-safe
+  // because PAID_PLAN_IDS is imported by client components.
+  notification?: { userId: string; type: "subscription.updated" | "payment.failed"; planLabel?: string };
+}> {
   const change = subscriptionStateForEvent(event);
   if (!change) return { handled: false, reason: `ignored event type ${event.event_type}` };
 
@@ -325,10 +333,29 @@ export async function applyPaddleEvent(
     if (error) throw new Error(`profiles upsert failed: ${error.message}`);
   }
 
+  // 2b. Compute the notification spec for the plan/state change — pure data,
+  // no side effects (no try/catch needed here). Emission happens in the
+  // SERVER-ONLY caller, app/api/billing/webhook/route.ts, after this returns,
+  // fail-open there: a notification hiccup must never break webhook
+  // acknowledgement, and this file must never import the server-only
+  // notifications barrel (it is reachable from client components).
+  let notification:
+    | { userId: string; type: "subscription.updated" | "payment.failed"; planLabel?: string }
+    | undefined;
+  if (change.status === "canceled") {
+    notification = { userId, type: "subscription.updated", planLabel: change.planId ?? "beta" };
+  } else if (change.status === "past_due" || change.status === "paused") {
+    notification = { userId, type: "payment.failed" };
+  } else if (change.planId) {
+    // activation / upgrade (plan_status "active" + plan set) — includes
+    // trialing, which the detachment also treats as an activation.
+    notification = { userId, type: "subscription.updated", planLabel: change.planId };
+  }
+
   // 3. Audit trail (best-effort; a pre-0008 DB lacks paddle_event_id).
   await insertEventAudit(service, event, userId, now);
 
-  return { handled: true };
+  return { handled: true, notification };
 }
 
 async function insertEventAudit(
