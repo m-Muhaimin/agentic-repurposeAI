@@ -14,6 +14,7 @@
 // expires_in and the user must re-authorize.
 
 import crypto from "crypto";
+import { log } from "@/lib/logger";
 
 const AUTH_URL = "https://auth.buffer.com/auth";
 const TOKEN_URL = "https://auth.buffer.com/token";
@@ -72,15 +73,46 @@ export function generatePkceChallenge(verifier: string): string {
   return base64Url(crypto.createHash("sha256").update(verifier).digest());
 }
 
-// Origin used for OAuth redirects and post-flow navigation. Pinned via
-// NEXT_PUBLIC_APP_URL in production so the redirect_uri never shifts with an
-// incoming Host header; locally it falls back to the request origin (which must
-// itself be registered as a redirect URI in the Buffer app console).
+// "Private" hostnames (localhost, LAN IPs) that can never be the deployed
+// origin — used to detect a dev-leftover NEXT_PUBLIC_APP_URL reaching prod.
+function isPrivateHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false;
+  const octets = h.split(".").map(Number);
+  const [a, b] = octets;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+// Origin used for OAuth redirects and post-flow navigation. NEXT_PUBLIC_APP_URL
+// pins the production origin so the redirect_uri never shifts with an incoming
+// Host header; locally it falls back to the request origin. Because Buffer and
+// Google match redirect_uri EXACTLY against the registered URI, a stray trailing
+// slash is normalized away — and a private/localhost pin that is clearly a dev
+// leftover (reaching a public request) is ignored in favor of the real request
+// origin, which is the #1 cause of `redirect_uri_mismatch`.
 export function appBaseUrl(request: Request): string {
-  // Normalize away a trailing slash in NEXT_PUBLIC_APP_URL: the redirect URI is
-  // built by path-splicing, and Buffer/Google match redirect_uri exactly against
-  // the registered URI — a stray "/" makes every OAuth connect fail.
-  return (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/+$/, "");
+  const requestOrigin = new URL(request.url).origin.replace(/\/+$/, "");
+  const pinned = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (!pinned) return requestOrigin;
+  try {
+    const pinnedHost = new URL(pinned).hostname;
+    const requestHost = new URL(requestOrigin).hostname;
+    if (isPrivateHostname(pinnedHost) && !isPrivateHostname(requestHost)) {
+      log.warn("buffer.oauth.local_pin_ignored", { pinned, requestOrigin });
+      return requestOrigin;
+    }
+  } catch {
+    // Unparseable pin (no scheme) — never build a redirect URI from it.
+    return requestOrigin;
+  }
+  return pinned;
 }
 
 export function bufferOAuthRedirectUri(request: Request): string {

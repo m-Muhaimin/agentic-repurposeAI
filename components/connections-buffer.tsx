@@ -42,6 +42,16 @@ export default function ConnectionsBuffer({
     }
   }
 
+  async function serverError(res: Response, fallback: string): Promise<string> {
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === "string" && body.error) return body.error;
+    } catch {
+      // non-JSON body — fall through to the generic message
+    }
+    return fallback;
+  }
+
   async function handleSaveApiKey() {
     const key = apiKeyInput.trim();
     if (!key) return;
@@ -52,7 +62,7 @@ export default function ConnectionsBuffer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: key })
       });
-      if (!res.ok) throw new Error("Could not save the API key.");
+      if (!res.ok) throw new Error(await serverError(res, "Could not save the API key."));
       setHasApiKey(true);
       setApiKeyInput("");
       setApiKeyState("idle");
@@ -67,7 +77,7 @@ export default function ConnectionsBuffer({
     setApiKeyState("remove");
     try {
       const res = await fetch("/api/integrations/buffer/api-key", { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not remove the API key.");
+      if (!res.ok) throw new Error(await serverError(res, "Could not remove the API key."));
       setHasApiKey(false);
       setApiKeyState("idle");
       router.refresh();

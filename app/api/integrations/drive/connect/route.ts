@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildDriveAuthorizeUrl, driveOAuthRedirectUri } from "@/lib/drive/oauth";
+import { log } from "@/lib/logger";
 
 // Kicks off the Google consent screen for Drive. The state is bound to an
 // httpOnly, sameSite=Lax cookie so the callback can reject CSRF'd `code`
@@ -18,8 +19,10 @@ export async function GET(request: Request) {
   }
 
   const state = crypto.randomBytes(16).toString("hex");
+  const redirectUri = driveOAuthRedirectUri(request);
+  log.info("integrations.drive.connect", { user_id: user.id, redirect_uri: redirectUri });
   const authorizeUrl = buildDriveAuthorizeUrl({
-    redirectUri: driveOAuthRedirectUri(request),
+    redirectUri,
     state,
     clientId: process.env.GOOGLE_CLIENT_ID
   });

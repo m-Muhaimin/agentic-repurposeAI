@@ -7,6 +7,7 @@ import {
   generatePkceVerifier,
   generatePkceChallenge
 } from "@/lib/buffer/oauth";
+import { log } from "@/lib/logger";
 
 // Kicks off the Buffer consent screen. The state AND the PKCE code_verifier are
 // bound to an httpOnly, sameSite=Lax cookie so the callback can reject CSRF'd
@@ -23,8 +24,10 @@ export async function GET(request: Request) {
   const state = crypto.randomBytes(16).toString("hex");
   const verifier = generatePkceVerifier();
   const codeChallenge = generatePkceChallenge(verifier);
+  const redirectUri = bufferOAuthRedirectUri(request);
+  log.info("integrations.buffer.connect", { user_id: user.id, redirect_uri: redirectUri });
   const authorizeUrl = buildAuthorizeUrl({
-    redirectUri: bufferOAuthRedirectUri(request),
+    redirectUri,
     state,
     codeChallenge
   });

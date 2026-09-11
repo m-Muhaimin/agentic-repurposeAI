@@ -6,6 +6,7 @@
 import { decryptSecret, encryptSecret } from "./crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { refreshAccessToken, BufferOAuthError, type BufferTokens } from "./oauth";
+import { log } from "@/lib/logger";
 
 // Kept deliberately structural (mirrors the remote `buffer_connections` table)
 // rather than wired into types/supabase.ts, which is a handwritten placeholder —
@@ -155,21 +156,52 @@ export async function getApiKey(userId: string): Promise<string | null> {
     throw new Error(`Could not read Buffer API key: ${error.message}`);
   }
   if (error || !data || !(data as { api_key?: string | null }).api_key) return null;
-  return decryptSecret((data as { api_key: string }).api_key);
+  try {
+    return decryptSecret((data as { api_key: string }).api_key);
+  } catch (cause) {
+    // Unreadable ciphertext (rotated/mismatched encryption key, tampered row):
+    // treat as absent so scheduling/metrics degrade to "no API key" instead of
+    // 500ing the whole agent run. Re-saving the key overwrites the bad row.
+    log.warn("buffer.api_key_unreadable", {
+      user_id: userId,
+      detail: cause instanceof Error ? cause.message : String(cause)
+    });
+    return null;
+  }
+}
+
+// Read the connection row WITHOUT decrypting. Saving a fresh API key must never
+// depend on the stored access_token/refresh_token/api_key ciphertext being
+// readable — an undecryptable legacy row (e.g. BUFFER_TOKEN_ENCRYPTION_KEY was
+// rotated between deploys) should not block re-saving a key. Existing ciphertext
+// is preserved verbatim; only api_key is (re)encrypted.
+async function getRawConnection(
+  userId: string
+): Promise<Pick<BufferConnectionRow, "buffer_account_id" | "buffer_username" | "access_token" | "refresh_token" | "access_token_expires_at"> | null> {
+  const { data, error } = await db()
+    .from("buffer_connections")
+    .select("buffer_account_id, buffer_username, access_token, refresh_token, access_token_expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as unknown as Pick<
+    BufferConnectionRow,
+    "buffer_account_id" | "buffer_username" | "access_token" | "refresh_token" | "access_token_expires_at"
+  >;
 }
 
 export async function saveApiKey(userId: string, apiKey: string): Promise<void> {
   const trimmed = apiKey.trim();
   if (!trimmed) throw new Error("Buffer API key must not be empty.");
-  const existing = await getConnection(userId);
+  const existing = await getRawConnection(userId);
   const row: Partial<BufferConnectionRow> = {
     user_id: userId,
     // Sentinel OAuth values keep the NOT NULL contract; they are never used to
     // publish because connectionHasOAuth() sees the blank access_token.
     buffer_account_id: existing?.buffer_account_id ?? API_KEY_ONLY_ACCOUNT_ID,
     buffer_username: existing?.buffer_username ?? API_KEY_ONLY_USERNAME,
-    access_token: existing?.accessToken ? encryptSecret(existing.accessToken) : "",
-    refresh_token: existing?.refresh_token ? encryptSecret(existing.refresh_token) : null,
+    access_token: existing?.access_token ?? "",
+    refresh_token: existing?.refresh_token ?? null,
     access_token_expires_at: existing?.access_token_expires_at ?? null,
     api_key: encryptSecret(trimmed),
     updated_at: new Date().toISOString()

@@ -43,7 +43,13 @@ export async function PUT(request: Request) {
         { status: 503 }
       );
     }
-    return NextResponse.json({ error: "Could not save the Buffer API key." }, { status: 500 });
+    const message =
+      err instanceof Error && /BUFFER_TOKEN_ENCRYPTION_KEY/i.test(err.message)
+        ? "The Buffer encryption key isn't configured. Tell the admin to set BUFFER_TOKEN_ENCRYPTION_KEY on the server."
+        : err instanceof Error
+          ? `Could not save the Buffer API key: ${err.message}`
+          : "Could not save the Buffer API key.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   log.info("buffer.api_key_saved", { user_id: user.id });
@@ -67,7 +73,10 @@ export async function DELETE() {
         { status: 503 }
       );
     }
-    return NextResponse.json({ error: "Could not remove the Buffer API key." }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? `Could not remove the Buffer API key: ${err.message}` : "Could not remove the Buffer API key." },
+      { status: 500 }
+    );
   }
 
   log.info("buffer.api_key_deleted", { user_id: user.id });
