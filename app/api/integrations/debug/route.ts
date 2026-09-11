@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { youtubeOAuthRedirectUri, appBaseUrl as youtubeAppBaseUrl } from "@/lib/youtube/oauth";
 import { driveOAuthRedirectUri } from "@/lib/drive/oauth";
 import { bufferOAuthRedirectUri } from "@/lib/buffer/oauth";
+import { googleAuthRedirectUri } from "@/lib/google/auth";
 
 // OAuth integration diagnostics — answers "what redirect_uri is the app really
 // sending, and is it registered?" after a `redirect_uri_mismatch` error.
@@ -43,11 +44,12 @@ export async function GET(request: Request) {
     redirectUris: {
       youtube: youtubeOAuthRedirectUri(request),
       drive: driveOAuthRedirectUri(request),
-      buffer: bufferOAuthRedirectUri(request)
+      buffer: bufferOAuthRedirectUri(request),
+      googleAuth: googleAuthRedirectUri(request)
     },
     hint: [
       "Register each redirectUri EXACTLY as printed (no trailing slash) under the matching provider console:",
-      "youtube + drive live on the same Google Cloud OAuth client (GOOGLE_CLIENT_ID) — the youtube AND drive callback paths are separate entries.",
+      "youtube + drive (+ this googleAuth sign-in callback) live on the same Google Cloud OAuth client (GOOGLE_CLIENT_ID) — the youtube, drive, AND auth/google callbacks are separate entries.",
       "buffer lives on the Buffer app console (BUFFER_CLIENT_ID).",
       "redirect_uri_mismatch almost always means a registered URI differs (origin, port, scheme http/https, or a trailing slash) — or NEXT_PUBLIC_APP_URL is a localhost leftover reaching a public request."
     ].join(" ")

@@ -175,6 +175,10 @@ no Authorization header). Full details: [docs/API.md](docs/API.md).
 ### Auth & account
 
 - `GET /api/auth/callback` — PKCE exchange; only `?next=reset-password` allowlisted; redirect.
+- `GET /api/auth/google/connect` — public; kicks off "Sign in with Google" (OpenID Connect consent,
+  state+nonce cookie). Redirects to Google.
+- `GET /api/auth/google/callback` — public; validates state (CSRF), exchanges code for id_token,
+  `signInWithIdToken` creates/links user and sets session cookie → `/dashboard`.
 - `GET /api/account/export` — GDPR export `{ exportedAt, userId, sources, outputs, jobs, prompts }`.
 - `PATCH /api/account/delete` — admin-deletes the user (cascade) → `{ ok }`.
 

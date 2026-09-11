@@ -374,6 +374,33 @@ Public. Query params: `code`, `next`.
   redirect to `/reset-password`.
 - Otherwise redirect to `/dashboard`.
 
+### `GET /api/auth/google/connect` — Sign in with Google
+
+Public (the user is not signed in yet). Redirects to Google's consent screen
+(OpenID Connect scopes `openid email profile`) and sets a `google_auth_state`
+httpOnly `sameSite=Lax` cookie (600s) carrying `{ state, nonce }` for CSRF
+state binding + id_token nonce verification. Reuses `GOOGLE_CLIENT_ID`/`SECRET`.
+
+- **Redirect URI:** `{origin}/api/auth/google/callback` — a *separate* entry from
+  the youtube/drive callbacks on the same Google Cloud OAuth client.
+- `GOOGLE_CLIENT_ID` missing → `503 {"error":"Google OAuth is not configured."}`.
+
+### `GET /api/auth/google/callback`
+
+Public OAuth callback. Query: `code`, `state`, optional `error`.
+
+- Consent denied → `/login?google=denied&reason=denied`.
+- State mismatch / missing code → `/login?google=error&reason=state`
+  (constant-time compare).
+- Exchanges the code for an id_token, then
+  `supabase.auth.signInWithIdToken({ provider: "google", token, nonce })` —
+  Supabase verifies the token (incl. nonce claim) and auto-creates/links the
+  user, and the session cookie is persisted onto the response.
+- Success → `/dashboard`. Config missing → `?google=error&reason=config`; other
+  failures → `?google=error&reason=failed`.
+- No provider-level redirect registration beyond the Google console entry;
+  the Google provider must be enabled in the Supabase dashboard.
+
 ### `GET /api/account/export`
 
 **Auth:** required.
