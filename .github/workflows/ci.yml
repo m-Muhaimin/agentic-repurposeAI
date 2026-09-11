@@ -9,6 +9,12 @@ jobs:
   build:
     name: Typecheck, tests, build
     runs-on: ubuntu-latest
+    env:
+      # Public-by-design browser keys (embedded in every client bundle), supplied
+      # as repo variables so the production build can prerender pages that
+      # construct a Supabase client (login, reset-password, (app) shell).
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
