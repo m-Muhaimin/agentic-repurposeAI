@@ -155,7 +155,6 @@ function resolveActiveHref(pathname: string): string {
 
 // Page titles for the sticky top bar, ordered longest-prefix last-match wins.
 const TOP_BAR_TITLES: Array<[string, string]> = [
-  ["/content", "Content calendar"],
   ["/agent/observe", "AI insights"],
   ["/settings/usage", "Plan & usage"],
   ["/repurpose", "Content library"],

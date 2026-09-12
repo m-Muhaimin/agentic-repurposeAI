@@ -80,7 +80,6 @@ export const ALLOWED_ACTION_URL_PREFIXES = [
   "/publish",
   "/settings",
   "/dashboard",
-  "/content",
   "/connections",
   "/branding",
   "/notifications",

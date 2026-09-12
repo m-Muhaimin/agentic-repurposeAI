@@ -43,7 +43,6 @@ export async function middleware(request: NextRequest) {
     "/agent",
     "/publish",
     "/settings",
-    "/content",
     "/notifications",
     "/reset-password",
     "/api/account/delete",
