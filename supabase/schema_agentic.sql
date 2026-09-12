@@ -90,6 +90,8 @@ create table if not exists public.v4_agent_steps (
   label text,
   input jsonb,
   output jsonb,
+  -- idempotency: v1 orchestrator stable-key anchor (migration 20260912000003)
+  idempotency_key text,
   retry_count int not null default 0,
   started_at timestamptz,
   finished_at timestamptz,
@@ -116,6 +118,10 @@ create policy "Users can delete their own agent steps"
 
 create index if not exists v4_agent_steps_run_idx
   on public.v4_agent_steps (run_id, created_at);
+
+create unique index if not exists v4_agent_steps_idempotency_key_unique
+  on public.v4_agent_steps (idempotency_key)
+  where idempotency_key is not null;
 
 create index if not exists v4_agent_steps_run_status_idx
   on public.v4_agent_steps (run_id, status) where status <> 'done';

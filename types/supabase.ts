@@ -114,7 +114,7 @@ export type Database = {
         Relationships: [{ foreignKeyName: "v4_agent_runs_source_id_fkey"; columns: ["source_id"]; isOneToOne: false; referencedRelation: "sources"; referencedColumns: ["id"] }];
       };
       v4_agent_steps: {
-        Row: { id: string; run_id: string; user_id: string; kind: "planning"|"source"|"generation"|"review"|"distribution"|"strategy"; status: "pending"|"running"|"done"|"failed"|"skipped"; label: string | null; input: unknown; output: unknown; retry_count: number; started_at: string | null; finished_at: string | null; created_at: string };
+        Row: { id: string; run_id: string; user_id: string; kind: "planning"|"source"|"generation"|"review"|"distribution"|"strategy"; status: "pending"|"running"|"done"|"failed"|"skipped"; label: string | null; input: unknown; output: unknown; idempotency_key: string | null; retry_count: number; started_at: string | null; finished_at: string | null; created_at: string };
         Insert: Partial<Database["public"]["Tables"]["v4_agent_steps"]["Row"]> & { run_id: string; user_id: string; kind: "planning"|"source"|"generation"|"review"|"distribution"|"strategy" };
         Update: Partial<Database["public"]["Tables"]["v4_agent_steps"]["Row"]>;
         Relationships: [{ foreignKeyName: "v4_agent_steps_run_id_fkey"; columns: ["run_id"]; isOneToOne: false; referencedRelation: "v4_agent_runs"; referencedColumns: ["id"] }];
