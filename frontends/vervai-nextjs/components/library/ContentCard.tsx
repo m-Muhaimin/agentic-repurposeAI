@@ -130,7 +130,7 @@ function Preview({ item }: { item: ContentCardItem }) {
           {preview.authorHandle} • {preview.tweetIndex}
         </span>
       </div>
-      <p className="font-body-sm text-body-sm text-on-surface italic">"{preview.quote}"</p>
+      <p className="font-body-sm text-body-sm text-on-surface italic">{`"${preview.quote}"`}</p>
     </div>
   );
 }

@@ -37,21 +37,23 @@ export default function ApiExtensibilityPanel() {
             </div>
             <div className="p-space-sm rounded-lg bg-inverse-surface text-inverse-on-surface font-mono text-body-sm flex flex-col gap-1 overflow-x-auto shadow-sm">
               <span className="text-tertiary-fixed-dim">
-                import {'{'} VervClient {'}'} from '@vervai/sdk';
+                import {'{'} VervClient {'}'}{' from \'@vervai/sdk\';'}
               </span>
               <span className="text-inverse-on-surface">const verv = new VervClient({'{'}</span>
               <span className="pl-4 text-on-primary-container">
-                apiKey: process.env.VERV_SECRET_KEY,
+                apiKey: proces...KEY,
               </span>
               <span className="pl-4 text-on-primary-container">
                 webhookSecret: process.env.SIGNING_KEY
               </span>
               <span className="text-inverse-on-surface">{'}'});</span>
-              <span className="text-outline-variant">// Trigger autonomous synthesis run</span>
+              <span className="text-outline-variant">{'// Trigger autonomous synthesis run'}</span>
               <span className="text-inverse-on-surface">const pipeline = await verv.agent.run({'{'}</span>
-              <span className="pl-4 text-primary-fixed-dim">sourceId: "src_9921_audio",</span>
-              <span className="pl-4 text-primary-fixed-dim">voiceProfile: "elena_vance_direct",</span>
-              <span className="pl-4 text-primary-fixed-dim">autoDispatch: false</span>
+              <span className="pl-4 text-primary-fixed-dim">sourceId: {'"src_9921_audio"'},</span>
+              <span className="pl-4 text-primary-fixed-dim">voiceProfile: {'"elena_vance_direct"'},</span>
+              <span className="pl-4 text-primary-fixed-dim">
+                autoDispatch: false
+              </span>
               <span className="text-inverse-on-surface">{'}'});</span>
             </div>
           </div>
