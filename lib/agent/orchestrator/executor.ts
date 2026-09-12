@@ -67,6 +67,17 @@ export function markStepFailed(
   };
 }
 
+export function markStepSkipped(
+  plan: OrchestrationPlan,
+  state: RunState,
+  stepId: string
+): RunState {
+  return {
+    ...state,
+    stepStatus: { ...state.stepStatus, [stepId]: "skipped" }
+  };
+}
+
 export function markStepRunning(
   plan: OrchestrationPlan,
   state: RunState,

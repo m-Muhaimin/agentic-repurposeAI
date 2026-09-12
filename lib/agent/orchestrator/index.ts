@@ -28,6 +28,7 @@ export {
   nextStep,
   markStepDone,
   markStepFailed,
+  markStepSkipped,
   markStepRunning,
   allStepsDone
 } from "./executor";
