@@ -31,6 +31,7 @@ plus the client-side intake flow that calls Supabase directly.
 - [Google Drive integration](#google-drive-integration)
 - [Buffer integration](#buffer-integration)
 - [Health & diagnostics](#health--diagnostics)
+- [Scheduled maintenance (Vercel Cron)](#scheduled-maintenance-vercel-cron)
 - [Rate limits & safety rails](#rate-limits--safety-rails)
 - [Data model](#data-model)
 
@@ -74,6 +75,7 @@ plus the client-side intake flow that calls Supabase directly.
 - Public/unauthed endpoints:
   - `GET /api/auth/callback`
   - `POST /api/billing/webhook` (Paddle signature verified)
+  - `GET /api/cron/storage-retention` (Vercel Cron, `Authorization: Bearer` with `CRON_SECRET`)
   - The two OAuth *redirect* kick-offs still require a session.
 
 Every other endpoint returns `401 {"error":"Not signed in"}` when the session
@@ -1106,6 +1108,42 @@ presence — never secrets:
 `effectiveBase` shows the origin `NEXT_PUBLIC_APP_URL` resolves to (a
 localhost/private pin reaching a public request is ignored in favor of the real
 request origin).
+
+---
+
+## Scheduled maintenance (Vercel Cron)
+
+### `GET /api/cron/storage-retention` — storage retention sweep
+
+**Auth:** none — guarded by the shared `CRON_SECRET` env var instead: Vercel
+Cron automatically sends it as `Authorization: Bearer <CRON_SECRET>` on every
+invocation. The route strips the `Bearer ` prefix and compares the token via
+SHA-256 digests + `crypto.timingSafeEqual`, fail-closed — `401 {"error":"Unauthorized"}`
+when `CRON_SECRET` is unset, the header is missing or not `Bearer`-shaped, or
+the token mismatches. Runs daily at 06:00 UTC (`vercel.json`; Vercel Cron
+sends `GET`, so the route must stay off `middleware.ts`).
+
+`200` runs the sweep and returns the summary:
+
+```json
+{ "usersExamined": 12, "objectsDeleted": 34, "errors": [] }
+```
+
+Deletes **only orphaned** objects in the private `sources` bucket, via the
+service-role client (`storage.objects` has no user-client delete policy):
+
+- everything under a user prefix whose `auth.users` row no longer exists
+  (account deletion never touches storage), **regardless of age**, and
+- objects under a live user's prefix with **no matching `sources.storage_path`
+  row** and older than the 24h grace window (upload-then-insert failure
+  orphans).
+
+Live source rows — `failed` / `uploaded` / `done` — are **never** touched
+(age-based deletion of live sources is a separate product decision). Bounded
+per run (`maxUsers` 200, `maxDeletes` 500, `remove()` chunks of ≤100);
+`remove()` of an already-missing object is treated as success; per-user
+failures land in `errors[]` without aborting the sweep. On failure:
+`500 {"error": <message>}` (no stack).
 
 ---
 
