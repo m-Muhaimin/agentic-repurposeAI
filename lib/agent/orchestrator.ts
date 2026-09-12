@@ -54,13 +54,13 @@ const HEARTBEAT_STALE_MS = 90 * 1000;
 // stays cheap and predictable). Planning tokens are real (usageMetadata);
 // generation tokens are estimated from transcript+draft size. Deliberately
 // crude — the P2 budget ceilings are the guardrail on top of the estimate.
-function estimateGenerationTokens(transcript: string, content: string): number {
+export function estimateGenerationTokens(transcript: string, content: string): number {
   return Math.round(transcript.length / 4 + content.length / 4);
 }
 
 // Pre-call cost estimate for one generation (the transcript half), used so the
 // cost guard can trip BEFORE spending on the next LLM call.
-function estimateGenerationCost(transcript: string): number {
+export function estimateGenerationCost(transcript: string): number {
   return Math.round(transcript.length / 4) / 100;
 }
 
@@ -68,12 +68,12 @@ function estimateGenerationCost(transcript: string): number {
 // run fails with the budget message rather than retrying.
 class RunBudgetError extends Error {}
 
-interface ClaimedRun {
+export interface ClaimedRun {
   run: AgentRunRow;
   phase: "planning" | "execution";
 }
 
-interface RunRowLite {
+export interface RunRowLite {
   id: string;
   user_id: string;
   status: string;
@@ -84,7 +84,7 @@ interface RunRowLite {
 
 // What a phase ended with. `done` = normal completion; the rest are clean stops
 // that keep whatever completed work already exists.
-interface RunOutcome {
+export interface RunOutcome {
   reason: StopReason;
   costUnits: number;
   inputTokens: number;
@@ -100,7 +100,7 @@ interface RunOutcome {
 // Claim a run for planning (created/planning, or stale) or execution
 // (executing/evaluating, if stale). Runs at awaiting_approval, done, failed or
 // cancelled are never claimed. Returns null when we don't hold it.
-async function claimRun(
+export async function claimRun(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string
 ): Promise<ClaimedRun | null> {
@@ -146,7 +146,7 @@ async function claimRun(
 }
 
 // Record a durable step row. `kind` must map to the schema's allowed set.
-async function recordStep(
+export async function recordStep(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string,
   userId: string,
@@ -175,7 +175,7 @@ async function recordStep(
 // returns the live status. Also the cancellation check — if the run was
 // cancelled between steps, a later process call must not keep working on it.
 // Returns null when the row no longer exists (or reached a terminal status).
-async function touchRun(
+export async function touchRun(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string
 ): Promise<RunStatus | null> {
@@ -192,7 +192,7 @@ async function touchRun(
 
 // Durable, cross-claim step count — the run's true work so far (retries
 // included), the basis of the maxSteps guard.
-async function countRecordedSteps(
+export async function countRecordedSteps(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string
 ): Promise<number> {
@@ -616,7 +616,7 @@ async function runExecution(
 // Central finalizer — done / cancelled / budget-stop all land here so the
 // partial-completion rule is one code path: whatever completed work exists is
 // preserved on the run and in the library.
-async function finalizeRun(
+export async function finalizeRun(
   service: Awaited<ReturnType<typeof createServiceClient>>,
   runId: string,
   userId: string,
