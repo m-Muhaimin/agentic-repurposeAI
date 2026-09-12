@@ -110,7 +110,7 @@ describe("ingest", () => {
     const f = err as IngestionFailure;
     expect(f.stage).toBe("failed");
     expect(f.message).toContain("No transcript was produced from this PDF file");
-    expect(f.message).toContain("PDF text extraction is coming soon");
+    expect(f.message).toContain("PDF text extraction failed — the file may be corrupt or scanned. Try a text-based source.");
     expect(f.nextStep).toBeTruthy();
     expect(f.message).not.toMatch(/^\s+at /m);
   });

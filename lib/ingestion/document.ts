@@ -95,7 +95,7 @@ export function documentProvider(opts: DocumentProviderOptions = {}): IngestionP
           why: toFailReason(err),
           nextStep:
             kind === "pdf"
-              ? "PDF text extraction is coming soon — re-ingest once the pdf adapter is wired."
+              ? "PDF text extraction failed — the file may be corrupt or scanned. Try a text-based source."
               : "Check the file is a valid document and re-ingest."
         });
       }

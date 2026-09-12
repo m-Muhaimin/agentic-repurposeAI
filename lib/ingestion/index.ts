@@ -273,12 +273,13 @@ registerIngestionProvider({ sourceTypes: ["audio", "video"], kinds: ["audio", "v
 // share source_type 'transcript' (first-wins in the registry keeps the
 // original provider as the type default; kind dispatch does the real routing).
 registerIngestionProvider(textFileProvider());
-// Phase 2: the file-backed adapters get their real engines — PDF via pdf-parse,
-// DOCX via mammoth, images via Gemini vision. Extraction failures stay honest
-// (the adapters' ensureMeaningful guard rejects empty/unsupported content). The
-// idempotency `store` is NOT wired at module load (this module must stay free of
-// server/env coupling): the worker injects a store-backed re-registration via
-// registerStoreBackedProviders() from ./store before it ingests.
+// Phase 2 wired the file-backed adapters with their real engines: PDF via
+// pdf-parse, DOCX via mammoth, images via Gemini vision — registered below on
+// the document and image providers. Extraction failures stay honest (the
+// adapters' ensureMeaningful guard rejects empty/unsupported content). The
+// idempotency `store` is NOT wired at module load (this module must stay free
+// of server/env coupling): the worker injects a store-backed re-registration
+// via registerStoreBackedProviders() from ./store before it ingests.
 registerIngestionProvider(documentProvider({ extractors: { pdf: pdfExtractor, docx: docxExtractor } }));
 registerIngestionProvider(imageProvider({ extractor: imageExtractor }));
 // Phase 3: URL + podcast intake. Both dispatch on URL content (kind 'url' /
