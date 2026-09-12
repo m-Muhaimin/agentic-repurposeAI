@@ -7,8 +7,9 @@
 // service-role-only writes, per-user SELECT policy with no client
 // insert/update/delete, and the read-state security-definer RPCs
 // (notifications_mark_read / notifications_mark_all_read) as the only
-// client-permitted mutations. All created users/rows are cleaned up regardless
-// of pass/fail.
+// client-permitted mutations — including mark-all-read cross-user isolation
+// and anon revocation of both RPCs. All created users/rows are cleaned up
+// regardless of pass/fail.
 //
 // Run: npm run verify:rls   (reads .env.local for Supabase URL/anon/service keys)
 
@@ -46,6 +47,7 @@ if (!URL || !ANON || !SERVICE) {
 
 // Service client bypasses RLS (admin); user clients authenticate as the user.
 const admin = createClient(URL, SERVICE, { auth: { autoRefreshToken: false, persistSession: false } });
+const anon = createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
 const anonClient = (email, password) =>
   createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
 
@@ -353,6 +355,71 @@ async function main() {
       "A can mark all notifications read (RPC returns count)",
       markAllByA,
       (d) => typeof d === "number" && d >= 0
+    );
+    // Contract 2 (strict): even a user's OWN notification insert must be
+    // blocked — there is no client INSERT policy at all. (A per-user INSERT
+    // WITH CHECK policy would still allow B to insert for themselves, so
+    // being blocked on one's own row proves no such policy exists.)
+    const ownNotifByB = await b
+      .from("notifications")
+      .insert({ user_id: bId, type: "rls_test", title: "b-own", body: "b-own" })
+      .select()
+      .single();
+    maybeBlockedWrite(
+      "B cannot insert their own notification (no insert policy)",
+      ownNotifByB
+    );
+    // Contract 4: mark-all-read touches ONLY the caller's rows; another
+    // user's unread rows stay unread, and the returned count reflects only
+    // the caller's marked rows. A's notification was marked read above, so
+    // reset it via the service role to re-arm an unread row for A.
+    const bNotifIns = await admin
+      .from("notifications")
+      .insert({
+        user_id: bId,
+        type: "rls_test",
+        title: "rls-test B notification",
+        body: "notification body for B",
+        dedupe_key: `rls-${bId}-${ts}`
+      })
+      .select()
+      .single();
+    maybeCheck(
+      "admin (service role) can insert B's notification",
+      bNotifIns,
+      (d) => Boolean(d?.id)
+    );
+    const bNotifId = bNotifIns.data?.id;
+    if (bNotifId) {
+      const resetA = await admin.from("notifications").update({ read_at: null }).eq("id", notifId);
+      check("admin can reset A's notification to unread", !resetA.error, resetA.error?.message);
+      const markAllAgain = await a.rpc("notifications_mark_all_read");
+      maybeCheck(
+        "A's mark-all-read returns count of A's unread rows",
+        markAllAgain,
+        (d) => typeof d === "number" && d >= 1
+      );
+      const bAfterAll = await b.from("notifications").select("read_at").eq("id", bNotifId).single();
+      maybeCheck(
+        "B's notification stays unread after A marks all read",
+        bAfterAll,
+        (d) => d?.read_at === null
+      );
+    }
+    // Contract 5: anon (no session) must not be able to execute either RPC —
+    // EXECUTE is revoked from PUBLIC and granted to authenticated only. A
+    // denied grant surfaces as an error (permission denied / not found).
+    const markReadAnon = await anon.rpc("notifications_mark_read", { p_id: notifId });
+    check(
+      "anon cannot execute notifications_mark_read",
+      Boolean(markReadAnon.error),
+      markReadAnon.error?.message ?? "expected the RPC to be denied"
+    );
+    const markAllAnon = await anon.rpc("notifications_mark_all_read");
+    check(
+      "anon cannot execute notifications_mark_all_read",
+      Boolean(markAllAnon.error),
+      markAllAnon.error?.message ?? "expected the RPC to be denied"
     );
     // Cleanup: admin removes the notification row (user deletion would cascade
     // via FK anyway, but the row is service-role-owned so remove it explicitly).
