@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { processAgentRun } from "@/lib/agent/orchestrator";
+import { processAgentRunV1 } from "@/lib/agent/orchestrator-bridge";
+import { isOrchestratorV1Enabled } from "@/lib/agent/orchestrator/flag";
 import { log } from "@/lib/logger";
 
 // POST /api/agent/process — SSE worker, mirrors /api/process: claim a run and
@@ -65,7 +67,13 @@ export async function POST(request: Request) {
 
   log.info("agent.process_requested", { run_id: runId, user_id: user.id });
 
+  const v1Enabled = isOrchestratorV1Enabled();
+
   return sseResponse(async (send) => {
-    await processAgentRun(runId, send);
+    if (v1Enabled) {
+      await processAgentRunV1(runId, send);
+    } else {
+      await processAgentRun(runId, send);
+    }
   });
 }
