@@ -85,7 +85,7 @@ export default async function RepurposePage({ params }: { params: { id: string }
             </div>
           </div>
 
-          <OutputEditor outputId={output.id} initialContent={output.content} />
+          <OutputEditor outputId={output.id} format={output.format} initialContent={output.content} />
         </Card>
       </div>
   );
