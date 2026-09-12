@@ -5,6 +5,10 @@
 
 const API = "https://www.googleapis.com/youtube/v3";
 
+// Wall-clock cap on a single YouTube Data API call so a hung provider can't
+// hang the request (ARCHITECTURE_FREEZE §3 bounded I/O).
+const FETCH_TIMEOUT_MS = 10_000;
+
 export class GoogleApiError extends Error {
   status: number;
   reason?: string;
@@ -41,9 +45,19 @@ export interface VideoSnippet {
 }
 
 async function getJson(path: string, accessToken: string): Promise<Record<string, unknown>> {
-  const res = await fetch(`${API}${path}`, {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: controller.signal
+    });
+  } catch (err) {
+    throw failFromTransport(err, "request");
+  } finally {
+    clearTimeout(timer);
+  }
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const e = (data?.error ?? {}) as Record<string, unknown>;
@@ -140,9 +154,19 @@ export async function fetchCaptionTracks(
 }
 
 export async function downloadCaption(accessToken: string, captionId: string): Promise<string> {
-  const res = await fetch(`${API}/captions/${captionId}?tfmt=srt`, {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API}/captions/${captionId}?tfmt=srt`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: controller.signal
+    });
+  } catch (err) {
+    throw failFromTransport(err, "caption download");
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     const e = (data?.error ?? {}) as Record<string, unknown>;
@@ -154,4 +178,14 @@ export async function downloadCaption(accessToken: string, captionId: string): P
     );
   }
   return res.text();
+}
+
+// Transport-level failures reject with raw DOM/Type errors; surface a timeout
+// abort as the lib's typed GoogleApiError so callers never see a raw
+// AbortError — all other failures keep their current shape.
+function failFromTransport(err: unknown, what: string): never {
+  if (err instanceof Error && err.name === "AbortError") {
+    throw new GoogleApiError(`YouTube API ${what} timed out.`, 408, "timeout");
+  }
+  throw err;
 }

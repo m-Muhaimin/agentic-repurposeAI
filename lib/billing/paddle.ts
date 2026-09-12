@@ -29,6 +29,10 @@ export interface PaddleConfig {
 const PADDLE_PRODUCTION = "https://api.paddle.com";
 const PADDLE_SANDBOX = "https://sandbox-api.paddle.com";
 
+// Wall-clock cap on Paddle API calls — tighter than the content clients (5s)
+// because checkout creation is user-facing (ARCHITECTURE_FREEZE §3 bounded I/O).
+const PADDLE_FETCH_TIMEOUT_MS = 5_000;
+
 export function getPaddleConfig(): PaddleConfig | null {
   const apiKey = process.env.PADDLE_API_KEY;
   const webhookSecret = process.env.PADDLE_WEBHOOK_SECRET;
@@ -139,7 +143,7 @@ export async function createCheckoutSession(opts: {
   if (!config) throw new PaddleNotConfiguredError();
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timer = setTimeout(() => controller.abort("timeout"), PADDLE_FETCH_TIMEOUT_MS);
 
   try {
     const res = await fetch(`${config.baseUrl}/transactions`, {
@@ -157,7 +161,12 @@ export async function createCheckoutSession(opts: {
       signal: controller.signal
     });
 
-    const body = await res.json().catch(() => null);
+    const body = await res.json().catch((err: unknown) => {
+      // A timeout abort during the body read must surface as the timeout error
+      // too, not as an "unknown" parse failure; other parse failures stay null.
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      return null;
+    });
     if (!res.ok) {
       const detail = body?.error?.detail ?? body?.error ?? body?.message ?? "unknown";
       throw new Error(`Paddle create transaction failed (${res.status}): ${detail}`);
@@ -172,8 +181,15 @@ export async function createCheckoutSession(opts: {
     }
 
     return { transactionId: data.id as string, url: url as string };
+  } catch (err) {
+    // A hung/exceedingly slow Paddle surfaces as a timeout error in the lib's
+    // existing plain-Error convention, never a raw AbortError DOMException.
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Paddle API request timed out.");
+    }
+    throw err;
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 

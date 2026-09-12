@@ -13,6 +13,10 @@ import type { DistributionPlatform } from "@/types/agent";
 
 export const BUFFER_API_URL = "https://api.buffer.com";
 
+// Wall-clock cap on a single Buffer API call so a hung provider can't hang the
+// request (ARCHITECTURE_FREEZE §3 bounded I/O).
+const FETCH_TIMEOUT_MS = 10_000;
+
 // Buffer service id for profile/channel matching. newsletter has no Buffer channel.
 const PLATFORM_TO_SERVICE: Partial<Record<DistributionPlatform, string>> = {
   linkedin: "linkedin",
@@ -65,11 +69,21 @@ function authHeaders(accessToken: string): HeadersInit {
 // so the caller can fail the job honestly. Calling code composes the query
 // strings; all values are embedded from trusted server-side inputs.
 async function bufferGraphql<T>(accessToken: string, query: string): Promise<T> {
-  const res = await fetch(BUFFER_API_URL, {
-    method: "POST",
-    headers: authHeaders(accessToken),
-    body: JSON.stringify({ query })
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(BUFFER_API_URL, {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ query }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    throw failFromTransport(err);
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (res.status === 429) {
     throw new BufferClientError("Buffer rate limit hit.", "rate_limited", retryAfterMs(res));
@@ -180,6 +194,16 @@ export async function createUpdate(opts: {
     throw new BufferClientError(`Buffer rejected the update: ${errors.join(", ")}`, "buffer_error");
   }
   return { success: true, update_id: updateIds[0] };
+}
+
+// Transport-level failures reject with raw DOM/Type errors; surface a timeout
+// abort as the lib's typed error so callers never see a raw AbortError — all
+// other failures keep their current shape.
+function failFromTransport(err: unknown): never {
+  if (err instanceof Error && err.name === "AbortError") {
+    throw new BufferClientError("Buffer API request timed out.", "buffer_error");
+  }
+  throw err;
 }
 
 function retryAfterMs(res: Response): number {
