@@ -677,3 +677,28 @@ reimplements) the existing subsystems.
 - **Tests**: `lib/agent/orchestrator/orchestrator.test.ts` (27 tests). Total
   420 tests / 41 files, `tsc` clean, build green, `npm run brand-check` exit 0.
   Backed by suggested flag `VERVAI_ORCHESTRATOR_V1`.
+
+---
+
+## Appendix — Discovery pass artifacts (2026-09-12)
+
+> Read-only reconnaissance; no code changed. This appendix exists so future
+> sessions find the discovery artifacts; it does not restructure the map above.
+
+- `tasks/discovery-scout.md` — system map (routes, components, APIs, DB, auth,
+  integrations, env, tests, abstractions, debt; file:line evidence).
+- `tasks/discovery-architect.md` — architecture analysis (boundaries, data flow,
+  contracts, state machines, failure modes, scalability, risks, change-first list,
+  open questions).
+- `docs/DISCOVERY_MAP.md` — consolidated durable map (both passes merged, verified
+  vs open-question markers).
+- `docs/adr/0001-0006` — decision records for the load-bearing choices
+  (jobs-table queue, RLS double-boundary, v1 policy+bridge+flag, drafts-in-outputs,
+  degrade-gracefully, registry-first formats).
+- Entries this map predates: the **bridge** `lib/agent/orchestrator-bridge.ts`
+  (1001 lines, `processAgentRunV1`, deep-import rule at `:10-14`), the **flag seam**
+  `app/api/agent/process/route.ts:3-5` (`VERVAI_ORCHESTRATOR_V1`,
+  `lib/agent/orchestrator/flag.ts:1-4`), and migration
+  `20260912000003_orchestrator_v1_idempotency.sql`. The v1 package itself is
+  covered in Phase 7; the wiring between it and the runtime is not — see
+  ADR-0003 + VERVAI_ORCHESTRATOR_ARCHITECTURE.md.
