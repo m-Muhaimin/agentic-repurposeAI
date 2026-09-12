@@ -172,7 +172,7 @@ export default function ObservePanel() {
             <p className="text-xs font-medium text-theme-text-secondary">Engagement &amp; performance</p>
             {!data.engagementAvailable ? (
               <p className="mt-2 rounded-lg border border-dashed border-theme-divider px-4 py-4 text-center text-xs text-theme-text-secondary">
-                Connect a publishing channel when you're ready to distribute your work.
+                Connect a publishing channel when you&apos;re ready to distribute your work.
                 <br />
                 <span className="italic">No channel is connected in this build, so no performance numbers are shown.</span>
               </p>

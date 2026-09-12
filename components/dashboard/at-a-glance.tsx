@@ -192,7 +192,7 @@ export default function AtAGlance() {
                   <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
                   <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{s.title}</p>
-                  <p className="text-xs text-theme-text-secondary">Save a recording — VervAI hasn't started it yet.</p>
+                  <p className="text-xs text-theme-text-secondary">Save a recording — VervAI hasn&apos;t started it yet.</p>
                   </div>
                   <button
                   type="button"

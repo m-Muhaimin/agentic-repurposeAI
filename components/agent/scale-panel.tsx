@@ -120,7 +120,7 @@ export default function ScalePanel() {
 
           {data.channelsConnected === false && (
             <p className="px-5 pb-2 text-xs text-theme-text-secondary">
-              Manual "Send now" from the publish queue needs a connected Buffer account (OAuth).
+              Manual &quot;Send now&quot; from the publish queue needs a connected Buffer account (OAuth).
             </p>
           )}
 

@@ -144,7 +144,7 @@ export default function ConnectionsBuffer({
         <div className="mt-4 flex flex-1 flex-col">
           <p className="text-sm text-theme-text-secondary">
             Connect a Buffer account so approved drafts can be posted to your channels — posting
-            always waits for your explicit approval. You can still use the agent's scheduling
+            always waits for your explicit approval. You can still use the agent&apos;s scheduling
             features below with just an API key.
           </p>
           <a href="/api/integrations/buffer/connect" className="btn btn-primary mt-6 self-start">
